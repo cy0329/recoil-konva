@@ -1,0 +1,51 @@
+#top-menu{
+    width: 100%;
+    position: absolute;
+    display: grid;
+    align-items: center;
+    top: -300px;
+    z-index: 1;
+    transition: all ease .5s;
+}
+
+#top-menu .tmbottom {
+    display: grid;
+    width: 100%;
+    height: 21px;
+    background: #4973ae;
+    justify-items: center;
+}
+
+#top-menu .tmbottom .wrapper {
+    position: relative;
+    top: -2px;
+    cursor: pointer;
+    align-items: center;
+}
+
+#top-menu .tmbottom .wrapper:hover img{
+    opacity: 1;
+}
+
+#top-menu .tmbottom p{
+    display: inline-block;
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
+    text-align: center;
+    align-self: center;
+    margin: 0 10px 0 10px;
+}
+
+#top-menu .tmbottom img {
+    position: relative;
+    top: 2px;
+    height: 13px;
+    opacity: .7;
+}
+
+#top-menu .tmbody {
+    width: 100%;
+    height: 300px;
+    background: white;
+}

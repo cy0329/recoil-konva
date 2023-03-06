@@ -1,0 +1,36 @@
+#mouse-coordinator {
+    position: absolute;
+    z-index: -8;
+    user-select: none;
+}
+
+#hLine{
+    outline: 1px solid black;
+    width: 100%;
+}
+
+#vLine {
+    outline: 1px solid black;
+    height: 100%;
+}
+
+#hLine, #vLine, #tooltip-span {
+    display:none;
+    position:absolute;
+    overflow:hidden;
+}
+
+#tooltip-span {
+    background-color: black;
+    color: white;
+    z-index: 1000;
+    padding: 3px 5px 3px 5px;
+    border-radius: 3px;
+}
+
+.trackingline{
+    outline: 1px solid yellow;
+    opacity: 1;
+    position: absolute;
+    display: block;
+}

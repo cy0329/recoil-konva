@@ -1,0 +1,66 @@
+#toolbar{
+    width: 300px;
+    position: absolute;
+    top: 100px;
+    left: 50px;
+    z-index: 5;
+    user-select: none;
+}
+
+#toolbar .tbtop{
+    width: 100%;
+    height: 21px;
+    background: #4973ae;
+    border-top-right-radius: 5px;
+    border-top-left-radius: 5px;
+    position: relative;
+}
+
+#toolbar .tbtop p{
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
+    text-align: center;
+    align-self: center;
+    margin: auto;
+    padding-top: 2px;
+    cursor: default;
+}
+
+#toolbar .tbtop #toggle-toolbar{
+    position: absolute;
+    top: 50%;
+    right: 2%;
+    transform: translate(-50%,-50%);
+    height: 13px;
+    cursor: pointer;
+    opacity: .7;
+}
+
+#toolbar .tbtop #toggle-toolbar:hover {
+    opacity: 1;
+}
+
+#toolbar .tbbody{
+    width: 100%;
+    height: 400px;
+    background: white;
+    border: solid #4973ae 3px;
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
+}
+
+#toolbar .tbbody .datasetname {
+    border: solid #6286c1 2px;
+    border-radius: 4px;
+    padding: 2px;
+    margin: 6px;
+    background-color: #6286c1;
+}
+
+#toolbar .tbbody .datasetname p{
+    font-size: 13px;
+    margin: auto;
+    text-align: center;
+    color: white;
+}
