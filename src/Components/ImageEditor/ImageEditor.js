@@ -55,13 +55,16 @@ function ImageEditor() {
   // const [mask, setMask] = useState(null)
   // const [oldMask, setOldMask] = useState(null)
 
+  const mask = useRef(null)
+  const oldMask = useRef(null)
+
   // 누끼에서 필요한 변수들 (상태값이면 안됨)
   let colorThreshold = 15;
   let blurRadius = 5;
   let simplifyTolerant = 4;
   let simplifyCount = 30;
-  let mask = null;
-  let oldMask = null;
+  // let mask = null;
+  // let oldMask = null;
   let currentThreshold = colorThreshold;
   // let imageInfo = null
   // let downPoint = null;
@@ -185,7 +188,6 @@ function ImageEditor() {
 
 
   function onMouseDown(e) {
-    // let ctrlPressed = e.evt.ctrlKey
     if (e.evt.button === 0 && !allowDraw) {
       if (nukkiMode) {
         setAllowDraw(true)
@@ -194,10 +196,7 @@ function ImageEditor() {
       }
     } else if (e.evt.button === 0 && allowDraw) {
       setAllowDraw(false)
-      setAddMode(e.evt.ctrlKey)
       setDownPoint(null)
-      // setNukkiMode(false)
-      // oldMask = null
     }
   }
 
@@ -226,14 +225,10 @@ function ImageEditor() {
   }
 
   function onMouseUp(e) {
-    // setPoints(cs[0].points)
-    // allowDraw = false;
-    // addMode = false;
-    // oldMask = null;
     currentThreshold = colorThreshold;
     setAllowDraw(false)
     setAddMode(false)
-    setDownPoint(null)
+    oldMask.current = null
   }
 
   function drawMask(x, y) {
@@ -247,29 +242,26 @@ function ImageEditor() {
       height: imageInfo.height,
       bytes: 4
     };
-    // console.log(image)
-    // console.log("mask: ", mask)
 
-    if (addMode && !oldMask) {
-      oldMask = mask;
+    if (addMode && !oldMask.current) {
+      oldMask.current = mask.current;
     }
 
-    let old = oldMask ? oldMask.data : null;
-    // console.log("old: ", old, "addMode: ", addMode)
-    mask = MagicWand.floodFill(image, x, y, currentThreshold, old, true);
-    if (mask) mask = MagicWand.gaussBlurOnlyBorder(mask, blurRadius, old);
+    let old = oldMask.current ? oldMask.current.data : null;
+
+    mask.current = MagicWand.floodFill(image, x, y, currentThreshold, old, true);
+    if (mask.current) mask.current = MagicWand.gaussBlurOnlyBorder(mask.current, blurRadius, old);
 
     if (addMode && oldMask) {
-      mask = mask ? concatMasks(mask, oldMask) : oldMask;
+      mask.current = mask.current ? concatMasks(mask.current, oldMask.current) : oldMask.current;
     }
-    // setOldMask(mask)
 
     trace()
   }
 
   function trace() {
-    if (!mask) return;
-    let cs = MagicWand.traceContours(mask);
+    if (!mask.current) return;
+    let cs = MagicWand.traceContours(mask.current);
     cs = MagicWand.simplifyContours(cs, simplifyTolerant, simplifyCount);
     cs = cs.filter(x => !x.inner);
 
@@ -288,6 +280,7 @@ function ImageEditor() {
   }, [points]);
 
   function concatMasks(mask, old) {
+    // console.log("old: ", old)
     let
       data1 = old.data,
       data2 = mask.data,
@@ -397,6 +390,7 @@ function ImageEditor() {
               width={size.width}
               height={size.height}
             />
+            {/* PolygonAnnotation에 objList를 map 으로 key에 id 줘서 돌리면 됨 vs PolygonAnnotation에 objList를 그대로 주고 안에서 Group 만들어낼때 map으로 돌리는게 나을수도 */}
             <PolygonAnnotation
               points={points}
               flattenedPoints={flattenedPoints}
