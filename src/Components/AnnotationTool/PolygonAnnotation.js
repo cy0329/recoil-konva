@@ -32,6 +32,7 @@ const PolygonAnnotation = (props) => {
 
   const [stage, setStage] = useState();
   const [flatPoints, setFlatPoints] = useState([]);
+  // const [minDist, setMinDist] = useState(0);
 
   const [plgObjList, setPlgObjList] = useRecoilState(polygonObjListState)
   const [selIndex, setSelIndex] = useRecoilState(selectedIndexState);
@@ -59,11 +60,12 @@ const PolygonAnnotation = (props) => {
     setFlatPoints(flatList);
   }, [points])
 
+  const handleGroupMouseOver = (e) => {
+    setStage(e.target.getStage());
+  }
 
   const handlePolygonMouseOver = (e) => {
     e.target.getStage().container().style.cursor = "pointer";
-    setStage(e.target.getStage());
-    console.log(e)
   };
 
   const handlePolygonMouseOut = (e) => {
@@ -108,17 +110,12 @@ const PolygonAnnotation = (props) => {
     return {x, y};
   };
 
-  const testHitFunc = (e) => {
-    if (!nukkiMode) {
-      e.target.getStage().container().style.cursor = "crosshair"
-    }
-  }
-
   // console.log("flattenedPoints: ", flattenedPoints.length)
   return (
     <Group
       name="polygon"
       dragBoundFunc={groupDragBound}
+      onMouseOver={handleGroupMouseOver}
     >
       <Line
         points={flatPoints.length > 0 ? flatPoints : flattenedPoints}
@@ -129,7 +126,7 @@ const PolygonAnnotation = (props) => {
         onClick={e => handlePolygonClick({e, key: plgObj ? plgObj.key : null})}
         onMouseOver={handlePolygonMouseOver}
         onMouseOut={handlePolygonMouseOut}
-        hitStrokeWidth={10}
+        hitStrokeWidth={4}
       />
       {points.map((point, index) => {
         const x = point.x // - vertexRadius / 2;

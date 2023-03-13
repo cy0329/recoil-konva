@@ -73,7 +73,7 @@ function ImageEditor() {
   // console.log("imageWidth, height : ", imageWidth, imageHeight)
   // console.log("oldMask: ", oldMask)
   // console.log("addMode: ", addMode)
-  // console.log("plgObjList: ", plgObjList)
+  console.log("plgObjList: ", plgObjList)
   // console.log("selIndex: ", selIndex)
   // -------------------------
 
@@ -207,15 +207,13 @@ function ImageEditor() {
         polygonKey.current++
         if (points.length === 0) return;
         let plgObj = {key: polygonKey.current, points: points, selected: false}
-        console.log("plgObj: ", plgObj)
         let copyPlgObjList = [...plgObjList, plgObj]
         setPlgObjList(copyPlgObjList)
         setPoints([])
       } else if (e.key === 'c') {
         setPoints([])
-      } else if (e.key === 's') {
+      } else if (e.key === 'd') {
         let copyPlgList = [...plgObjList]
-
 
         for (let i = 0; i < copyPlgList.length; i++) {
           if (copyPlgList[i].selected) {
@@ -231,24 +229,36 @@ function ImageEditor() {
 
         setPlgObjList(copyPlgList)
         setSelIndex(null)
-      } else if (e.key === 'd') {
-        let copyPlgList = [...plgObjList]
-        let deletedResult = copyPlgList.filter(item => !item.selected)
-
-        setPlgObjList(deletedResult)
-      } else if (e.key === 'r') {
-        setSelIndex(null)
       } else {
         console.log(e)
       }
     }
 
+    function handleKeyUp(e) {
+      if (e.key === "Delete") {
+        let copyPlgList = [...plgObjList]
+        let deletedResult = copyPlgList.filter(item => !item.selected)
+
+        setPlgObjList(deletedResult)
+      } else if (e.key === "Escape") {
+        setSelIndex(null)
+      } else {
+        console.log("onKeyUp : ", e)
+      }
+    }
+
     document.addEventListener('keypress', handleKeyPress)
+    document.addEventListener('keyup', handleKeyUp)
     return () => {
       document.removeEventListener('keypress', handleKeyPress)
+      document.removeEventListener('keyup', handleKeyUp)
     }
   }, [nukkiMode, points, plgObjList, selIndex])
 
+
+  const wheelHandler = (e) => {
+    console.log(e.evt.wheelDeltaY)
+  }
 
   /**
    * 마우스 좌표
@@ -459,6 +469,50 @@ function ImageEditor() {
       copyPlgObjList[i] = copyPlgObj
     }
     setPlgObjList(copyPlgObjList)
+
+
+    // 꼭짓점 추가
+    if (e.evt.altKey) {
+      let position = e.target.getStage().getPointerPosition()
+      let mousePos = {x: Math.round(position.x), y: Math.round(position.y)}
+      let x = mousePos.x
+      let y = mousePos.y
+
+      // 1) 폴리곤 특성 상, 제일 가까운 점, 기울기가 같은 직선 이런거 따져서 할 수가 없음
+      let selectedPolygon = plgObjList.filter(poly => poly.selected)[0]
+      let points = selectedPolygon.points
+      let addPointIndex = 0
+      let addingPoint = {}
+      for (let i = 0; i < points.length; i++) {
+        const startX = points[i].x
+        const startY = points[i].y
+        const endX = points[(i+1) % points.length].x
+        const endY = points[(i+1) % points.length].y
+
+        if (((startX <= x && x <= endX) || (endX <= x && x <= startX)) && ((startY <= y && y <= endY) || (endY <= y && y <= startY))) {
+          addPointIndex = i + 1
+          addingPoint = mousePos
+        }
+      }
+
+      console.log(addPointIndex, addingPoint)
+
+      let copiedList = [...plgObjList]
+      for (let j = 0; j < copiedList.length; j++) {
+        if (copiedList[j].selected) {
+          let copiedSelectedObj = {...copiedList[j]}
+          console.log("copiedSelectedObj : ", copiedSelectedObj)
+          let copiedPoints = [...copiedSelectedObj.points]
+          copiedPoints.splice(addPointIndex, 0, addingPoint)
+          console.log("copiedPoints : ", copiedPoints)
+          copiedSelectedObj.points = copiedPoints
+          copiedList[j] = copiedSelectedObj
+        }
+      }
+
+      setPlgObjList(copiedList)
+
+    }
   }
 
   // // 폴리곤 전체에 대한 dragEnd
@@ -483,10 +537,6 @@ function ImageEditor() {
   //   }
   // };
 
-  const wheelHandler = (e) => {
-    console.log(e.evt.wheelDeltaY)
-  }
-
   return (
     <div className="section">
       <TopMenu/>
@@ -504,10 +554,10 @@ function ImageEditor() {
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
           onWheel={wheelHandler}
-          // scaleX={0.5}
-          // scaleY={0.5}
-          // x={200}
-          // y={200}
+          // scaleX={2}
+          // scaleY={2}
+          // x={0}
+          // y={0}
         >
           <Layer>
             <Image
