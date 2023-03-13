@@ -1,4 +1,4 @@
-export const getAvaragePoint = (points) => {
+export const getPolygonCenterPoint = (points) => {
   let totalX = 0;
   let totalY = 0;
   for (let i = 0; i < points.length; i += 2) {
@@ -23,7 +23,7 @@ export const getDistance = (node1, node2) => {
 
 
 export const dragBoundFunc = (stageWidth, stageHeight, vertexRadius, pos) => {
-  console.log("params: ", stageWidth, stageHeight, vertexRadius, pos)
+  // console.log("params: ", stageWidth, stageHeight, vertexRadius, pos)
   let x = pos.x;
   let y = pos.y;
   if (pos.x + vertexRadius > stageWidth) x = stageWidth;
@@ -31,7 +31,7 @@ export const dragBoundFunc = (stageWidth, stageHeight, vertexRadius, pos) => {
   if (pos.y + vertexRadius > stageHeight) y = stageHeight;
   if (pos.y - vertexRadius < 0) y = 0;
 
-  console.log("return: ", {x, y})
+  // console.log("return: ", {x, y})
   return {x, y};
 };
 

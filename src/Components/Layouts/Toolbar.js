@@ -14,7 +14,6 @@ import {nukkiModeState} from "../../stateManagement/atoms/Nukki/nukkiAtom";
 function Toolbar() {
   const [tbIsOpen, setTbIsOpen] = useRecoilState(toolbarIsOpenState)
   const [tbCoord, setTbCoord] = useRecoilState(toolbarCoordinateState)
-  const [nukkiMode, setNukkiMode] = useRecoilState(nukkiModeState)
 
 
   const [isDrgable, setIsDragable] = useState(false)
@@ -67,7 +66,6 @@ function Toolbar() {
           <div>
             <ImageFilters />
           </div>
-          <input type="checkbox" checked={nukkiMode} onChange={(e) => setNukkiMode(!nukkiMode)}/>
         </div>
       </div>
     </Draggable>

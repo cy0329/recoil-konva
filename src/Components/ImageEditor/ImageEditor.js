@@ -1,88 +1,87 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
-import $ from '../../../node_modules/jquery/dist/jquery.min.js';
 
-import {useRecoilState, useRecoilValue, useSetRecoilState} from "recoil";
+import {useRecoilState, useRecoilValue} from "recoil";
 
 import Toolbar from "../Layouts/Toolbar";
 import Jobsbar from "../Layouts/Jobsbar";
 import TopMenu from "../Layouts/TopMenu";
 import MouseCoordinator from "../Layouts/MouseCoordinator";
 
-import {filterState} from "../../stateManagement/atoms/canvasFilter/canvasFilterAtom";
-
 import './ImageEditor.css'
 import {Image, Layer, Stage} from "react-konva";
-import TestRect from "../KonvaElements/TestRect";
-import TestImage from "../KonvaElements/TestImage";
-import Nukki from "../Nukki/Nukki";
 import MagicWand from "magic-wand-tool";
-import Konva from "konva";
-import {allowDrawState, csState, imageInfoState, nukkiModeState} from "../../stateManagement/atoms/Nukki/nukkiAtom";
+import {
+  allowDrawState,
+  imageInfoState,
+  nukkiModeState,
+} from "../../stateManagement/atoms/Nukki/nukkiAtom";
 import PolygonAnnotation from "../AnnotationTool/PolygonAnnotation";
+import {filterState} from "../../stateManagement/atoms/canvasFilter/canvasFilterAtom";
+import {polygonObjListState, selectedIndexState} from "../../stateManagement/atoms/Nukki/polygonAtom";
 
 
-const imgSource = 'sample2.jpg'
-
-let renderCount = 0
 function ImageEditor() {
-  let stageRef = useRef(null)
+  const imgSource = 'sample2.jpg'
 
+  let stageRef = useRef(null)
   const imageRef = useRef(null);
 
+  // let renderCount = 0
+  // let polygonKey = 0
+  const renderCount = useRef(0)
+  const polygonKey = useRef(0)
 
-  const [tempCs, setTempCs] = useRecoilState(csState)
+  const colorThreshold = 15;
 
+  // local state -> recoil 로 변경할 예정
   const [image, setImage] = useState();
-  const [size, setSize] = useState({});
-  // const [isPolyComplete, setPolyComplete] = useState(false);
   const [points, setPoints] = useState([]);
-  const [isMouseOverPoint, setMouseOverPoint] = useState(false);
-  const [imageData, setImageData] = useState({})
   const [flattenedPoints, setFlattenedPoints] = useState([]);
-  const [position, setPosition] = useState([0, 0])
-  const [imageWidth, setImageWidth] = useState(0)
-  const [imageHeight, setImageHeight] = useState(0)
+  const [curTrsh, setCurTrsh] = useState(colorThreshold)
 
   // recoil state
   const [imageInfo, setImageInfo] = useRecoilState(imageInfoState)
   const [nukkiMode, setNukkiMode] = useRecoilState(nukkiModeState)
   const [allowDraw, setAllowDraw] = useRecoilState(allowDrawState)
+  const [plgObjList, setPlgObjList] = useRecoilState(polygonObjListState)
+  const [selIndex, setSelIndex] = useRecoilState(selectedIndexState);
+  const filter = useRecoilValue(filterState)
 
-  // 누끼 변수들 상태값 화 ( 드래그 없이 첫 클릭과 다음 클릭으로 설정하도록 )
-  // const [allowDraw, setAllowDraw] = useState(false)
+
+  // 누끼 변수들 state/ref 처리
   const [addMode, setAddMode] = useState(false)
   const [downPoint, setDownPoint] = useState(null)
-  // const [mask, setMask] = useState(null)
-  // const [oldMask, setOldMask] = useState(null)
 
   const mask = useRef(null)
   const oldMask = useRef(null)
 
   // 누끼에서 필요한 변수들 (상태값이면 안됨)
-  let colorThreshold = 15;
+  // let colorThreshold = 15;
   let blurRadius = 5;
-  let simplifyTolerant = 4;
+  let simplifyTolerant = 5;
   let simplifyCount = 30;
-  // let mask = null;
-  // let oldMask = null;
-  let currentThreshold = colorThreshold;
-  // let imageInfo = null
-  // let downPoint = null;
-  // let allowDraw = false;
-  // let addMode = false;
+  // let currentThreshold = colorThreshold;
+
 
   // -----console.log 영역-----
-  renderCount++
-  console.log('render', renderCount)
+  // renderCount.current++
+  // console.log('render', renderCount.current)
   // console.log("image: ", image)
   // console.log("imageInfo : ", imageInfo)
-  // console.log("imageData: ", imageData)
   // console.log("points: ", points)
   // console.log("flattenedPoints: ", flattenedPoints)
   // console.log("imageWidth, height : ", imageWidth, imageHeight)
   // console.log("oldMask: ", oldMask)
-  console.log("addMode: ", addMode)
+  // console.log("addMode: ", addMode)
+  // console.log("plgObjList: ", plgObjList)
+  // console.log("selIndex: ", selIndex)
   // -------------------------
+
+
+  document.oncontextmenu = () => {
+    return false
+  }
+
 
   /**
    * 이미지 그려줄 element 설정, 반환
@@ -91,94 +90,169 @@ function ImageEditor() {
     const maxCanvasWidth = window.innerWidth;
     const maxCanvasHeight = window.innerHeight;
 
-    const element = new window.Image();
-    element.src = imgSource;
+    const imgEl = new window.Image();
+    imgEl.src = imgSource;
 
     let width = 1600;
     let height = 900;
 
     // 이미지 스케일링
-    let imageRatio = element.height / element.width
+    let imageRatio = imgEl.height / imgEl.width
     if (imageRatio < 1) {
       // 가로가 세로보다 긴 경우
-      if (element.width > maxCanvasWidth) {
-        let newHeight = element.height * (maxCanvasWidth / element.width)
-        if (newHeight > maxCanvasHeight - 31) {
-          height = maxCanvasHeight - 31
-          width = element.width * ((maxCanvasHeight - 31) / element.height)
+      if (imgEl.width > maxCanvasWidth) {
+        let newHeight = imgEl.height * (maxCanvasWidth / imgEl.width)
+        if (newHeight > maxCanvasHeight - 21) {
+          height = maxCanvasHeight - 21
+          width = imgEl.width * ((maxCanvasHeight - 21) / imgEl.height)
 
         } else {
           width = maxCanvasWidth
           height = newHeight
         }
       } else {
-        if (element.height > maxCanvasHeight - 31) {
-          width = element.width * ((maxCanvasHeight - 31) / element.height)
-          height = maxCanvasHeight - 31
+        if (imgEl.height > maxCanvasHeight - 21) {
+          width = imgEl.width * ((maxCanvasHeight - 21) / imgEl.height)
+          height = maxCanvasHeight - 21
         } else {
-          width = element.width
-          height = element.height
+          width = imgEl.width
+          height = imgEl.height
 
         }
       }
     } else {
       // 가로가 세로보다 짧은 경우
-      if (element.height > maxCanvasHeight - 31) {
-        height = maxCanvasHeight - 31
-        width = element.width * ((maxCanvasHeight - 31) / element.height)
+      if (imgEl.height > maxCanvasHeight - 21) {
+        height = maxCanvasHeight - 21
+        width = imgEl.width * ((maxCanvasHeight - 21) / imgEl.height)
       } else {
-        width = element.width
-        height = element.height
+        width = imgEl.width
+        height = imgEl.height
       }
     }
 
-    element.width = width;
-    element.height = height;
-
-    return element;
-  }, [imgSource]); //it may come from redux so it may be dependency that's why I left it as dependecny...
+    imgEl.width = width;
+    imgEl.height = height;
 
 
-
-  useEffect(() => {
-    // 이미지 데이터 세팅, 이미지 w, h 세팅
-    let tempCanvas = document.createElement('canvas');
-    tempCanvas.width = imageElement.width
-    tempCanvas.height = imageElement.height
-    // setImageWidth(imageElement.width)
-    // setImageHeight(imageElement.height)
-    let tempContext = tempCanvas.getContext('2d');
-
-    tempContext.drawImage(imageElement, 0, 0, imageElement.width, imageElement.height);
-    const imageData = tempContext.getImageData(0, 0, imageElement.width, imageElement.height);
-    // console.log("imageData: ", imageData)
-    setImageData(imageData)
-  }, [imageElement])
+    return imgEl;
+  }, [imgSource])
 
   /**
-   * 이미지 onload로 설정
+   * 그려줄 이미지를 필터를 입혀서 canvas 에 그린 canvas element 로 변경
+   */
+  const filteredImage = useMemo(() => {
+    const cvsEl = document.createElement("canvas", {is: "tempCanvas"})
+    cvsEl.width = imageElement.width;
+    cvsEl.height = imageElement.height;
+    const ctx = cvsEl.getContext('2d')
+    ctx.drawImage(imageElement, 0, 0, imageElement.width, imageElement.height)
+    const data = ctx.getImageData(0, 0, imageElement.width, imageElement.height);
+    // 이미지 데이터는 필터 안들어가게 먼저 뽑아주고
+
+    ctx.clearRect(0, 0, imageElement.width, imageElement.height)
+    ctx.filter = filter
+    ctx.drawImage(imageElement, 0, 0, imageElement.width, imageElement.height)
+    // 리턴할 캔버스 엘리먼트는 필터링 적용되도록
+    return {cvsEl, data}
+  }, [imageElement, filter])
+
+
+  /**
+   * 필터링 된 이미지 데이터를 가지고
+   * imageInfo 상태값 설정해주고
    */
   useEffect(() => {
     const onload = function () {
-      setSize({
-        width: imageElement.width,
-        height: imageElement.height,
-      });
-      setImage(imageElement);
-      imageRef.current = imageElement;
+      setImage(filteredImage.cvsEl);
+      imageRef.current = filteredImage.cvsEl;
 
       setImageInfo({
-        width: imageElement.width,
-        height: imageElement.height,
-        data: imageData.data
+        width: filteredImage.cvsEl.width,
+        height: filteredImage.cvsEl.height,
+        data: filteredImage.data.data
       });
     };
 
-    if (imageData.data) onload()
-  }, [imageElement, imageData]);
+    if (filteredImage.data) onload()
+  }, [filteredImage]);
+
+  /**
+   * points 가 변함에 따라 polygon 그리는 Line에 필요한 flattenedPoints 상태값 설정
+   */
+  useEffect(() => {
+    let flattenList = []
+    for (let a of points) {
+      flattenList.push(a.x, a.y)
+    }
+    setFlattenedPoints(flattenList);
+  }, [points]);
+
+  /**
+   * 키보드 단축키 설정
+   */
+  useEffect(() => {
+    function handleKeyPress(e) {
+      if (e.key === 'a') {
+        setNukkiMode(!nukkiMode)
+        let copyPlgList = [...plgObjList]
+        for (let i = 0; i < copyPlgList.length; i++) {
+          let copyObj = {...copyPlgList[i]}
+          copyObj.selected = false
+          copyPlgList[i] = copyObj
+        }
+        setPlgObjList(copyPlgList)
+        setSelIndex(null)
+      } else if (e.key === ' ' && e.code === 'Space') {
+        polygonKey.current++
+        if (points.length === 0) return;
+        let plgObj = {key: polygonKey.current, points: points, selected: false}
+        console.log("plgObj: ", plgObj)
+        let copyPlgObjList = [...plgObjList, plgObj]
+        setPlgObjList(copyPlgObjList)
+        setPoints([])
+      } else if (e.key === 'c') {
+        setPoints([])
+      } else if (e.key === 's') {
+        let copyPlgList = [...plgObjList]
 
 
+        for (let i = 0; i < copyPlgList.length; i++) {
+          if (copyPlgList[i].selected) {
+            let copyObj = {...copyPlgList[i]}
+            let copyPoints = [...copyObj.points]
+            if (selIndex !== null) {
+              copyPoints.splice(selIndex, 1)
+            }
+            copyObj.points = copyPoints
+            copyPlgList[i] = copyObj
+          }
+        }
 
+        setPlgObjList(copyPlgList)
+        setSelIndex(null)
+      } else if (e.key === 'd') {
+        let copyPlgList = [...plgObjList]
+        let deletedResult = copyPlgList.filter(item => !item.selected)
+
+        setPlgObjList(deletedResult)
+      } else if (e.key === 'r') {
+        setSelIndex(null)
+      } else {
+        console.log(e)
+      }
+    }
+
+    document.addEventListener('keypress', handleKeyPress)
+    return () => {
+      document.removeEventListener('keypress', handleKeyPress)
+    }
+  }, [nukkiMode, points, plgObjList, selIndex])
+
+
+  /**
+   * 마우스 좌표
+   */
   function getMousePosition() {
     let stage = stageRef.getStage()
     // let stage = e.target.getStage()
@@ -187,6 +261,9 @@ function ImageEditor() {
   }
 
 
+  /**
+   * 마우스 클릭 키다운시 필요한 상태값 변경
+   */
   function onMouseDown(e) {
     if (e.evt.button === 0 && !allowDraw) {
       if (nukkiMode) {
@@ -200,8 +277,9 @@ function ImageEditor() {
     }
   }
 
-
-
+  /**
+   * 클릭 키다운 후 움직일때
+   */
   function onMouseMove(e) {
     if (allowDraw) {
 
@@ -216,27 +294,36 @@ function ImageEditor() {
         sign = sign < 0 ? sign / 5 : sign / 3;
         let thres = Math.min(Math.max(colorThreshold + Math.floor(sign * len), 1), 255);
         //let thres = Math.min(colorThreshold + Math.floor(len / 3), 255);
-        if (thres !== currentThreshold) {
-          currentThreshold = thres;
+        if (thres !== curTrsh) {
+          // currentThreshold = thres;
+          setCurTrsh(thres)
           drawMask(downPoint.x, downPoint.y);
         }
       }
     }
   }
 
+  /**
+   * 클릭 키다운 종료시, 상태값, 변수들 초기상태로
+   */
   function onMouseUp(e) {
-    currentThreshold = colorThreshold;
+    // currentThreshold = colorThreshold;
+    setCurTrsh(colorThreshold)
     setAllowDraw(false)
     setAddMode(false)
     oldMask.current = null
   }
 
+
+  /**
+   * 마스킹 해주는 함수
+   */
   function drawMask(x, y) {
     if (!imageInfo) return;
 
     // showThreshold();
 
-    let image = {
+    let maskingImg = {
       data: imageInfo.data,
       width: imageInfo.width,
       height: imageInfo.height,
@@ -249,7 +336,7 @@ function ImageEditor() {
 
     let old = oldMask.current ? oldMask.current.data : null;
 
-    mask.current = MagicWand.floodFill(image, x, y, currentThreshold, old, true);
+    mask.current = MagicWand.floodFill(maskingImg, x, y, curTrsh, old, true);
     if (mask.current) mask.current = MagicWand.gaussBlurOnlyBorder(mask.current, blurRadius, old);
 
     if (addMode && oldMask) {
@@ -259,6 +346,10 @@ function ImageEditor() {
     trace()
   }
 
+  /**
+   * 원본 : 마스킹 된 곳에 테두리 그리기
+   * 현재 : 필요한 points 상태값 설정
+   */
   function trace() {
     if (!mask.current) return;
     let cs = MagicWand.traceContours(mask.current);
@@ -266,19 +357,12 @@ function ImageEditor() {
     cs = cs.filter(x => !x.inner);
 
     // setTempCs(cs[0].points)
-    setPoints(cs[0].points)
+    setPoints(cs[0].points.slice(0, -1))
   }
 
-  // console.log("tempCs : ", tempCs)
-
-  useEffect(() => {
-    let flattenList = []
-    for (let a of points) {
-      flattenList.push(a.x, a.y)
-    }
-    setFlattenedPoints(flattenList);
-  }, [points]);
-
+  /**
+   * 마스킹 작업시 addMode 로 이어붙이기
+   */
   function concatMasks(mask, old) {
     // console.log("old: ", old)
     let
@@ -335,35 +419,73 @@ function ImageEditor() {
 
 
   /**
-   * 폴리곤 이동, 변형 관련
+   * 폴리곤 꼭짓점 이동
    */
-  const handlePointDragMove = (e) => {
+  const handlePointDragMove = (e, key) => {
+    console.log("key: ", key)
     const stage = e.currentTarget.getStage();
     const index = e.currentTarget.index - 1;
+    setSelIndex(index)
     const pos = [e.currentTarget._lastPos.x, e.currentTarget._lastPos.y];
     if (pos[0] < 0) pos[0] = 0;
     if (pos[1] < 0) pos[1] = 0;
     if (pos[0] > stage.width()) pos[0] = stage.width();
     if (pos[1] > stage.height()) pos[1] = stage.height();
     const newPos = {x: pos[0], y: pos[1]}
-    setPoints([...points.slice(0, index), newPos, ...points.slice(index + 1)]);
-  };
+    // console.log(newPos)
+    let copyPlgObjList = [...plgObjList]
+    let changingPlgObj = {...copyPlgObjList.filter(a => a.key === key)[0]}
+    changingPlgObj.points = [...changingPlgObj.points.slice(0, index), newPos, ...changingPlgObj.points.slice(index + 1)]
 
-  const handleGroupDragEnd = (e) => {
-    //drag end listens other children circles' drag end event
-    //...that's, why 'name' attr is added, see in polygon annotation part
-    // console.log("name: ", e)
-    if (e.target.name() === "polygon") {
-      let result = [];
-      let copyPoints = [...points];
-      copyPoints.map((point) =>
-        result.push([point[0] + e.target.x(), point[1] + e.target.y()])
-      );
-      e.target.position({x: 0, y: 0}); //needs for mouse position otherwise when click undo you will see that mouse click position is not normal:)
-      setPoints(result);
+    for (let i = 0; i < copyPlgObjList.length; i++) {
+      let copyObj = {...copyPlgObjList[i]}
+      if (copyObj.key === key) {
+        copyObj = changingPlgObj
+        copyPlgObjList[i] = copyObj
+      }
     }
+
+    setPlgObjList(copyPlgObjList)
+    // setPoints([...points.slice(0, index), newPos, ...points.slice(index + 1)]);
   };
 
+  const handlePolygonClick = ({e, key}) => {
+    setNukkiMode(false)
+    setSelIndex(null)
+    let copyPlgObjList = [...plgObjList]
+    for (let i = 0; i < copyPlgObjList.length; i++) {
+      let copyPlgObj = {...copyPlgObjList[i]}
+      copyPlgObj.selected = copyPlgObj.key === key;
+      copyPlgObjList[i] = copyPlgObj
+    }
+    setPlgObjList(copyPlgObjList)
+  }
+
+  // // 폴리곤 전체에 대한 dragEnd
+  // const handleGroupDragEnd = (e, key) => {
+  //   if (e.target.parent.attrs.name === "polygon") {
+  //     console.log("name = polygon")
+  //     let result = [];
+  //     let copyPlgObjList = [...plgObjList]
+  //     let changingPlgObj = {...copyPlgObjList.filter(a => a.key === key)[0]}
+  //
+  //     let copyPoints = [...changingPlgObj.points];
+  //     copyPoints.map((point) =>
+  //       result.push({x: point.x + e.target.x(), y: point.y + e.target.y()})
+  //     );
+  //
+  //     changingPlgObj.points = result
+  //     copyPlgObjList.filter(a => a.key === key)[0] = changingPlgObj
+  //     setPlgObjList(copyPlgObjList)
+  //
+  //     // e.target.position({x: 0, y: 0}); //needs for mouse position otherwise when click undo you will see that mouse click position is not normal:)
+  //     // setPoints(result);
+  //   }
+  // };
+
+  const wheelHandler = (e) => {
+    console.log(e.evt.wheelDeltaY)
+  }
 
   return (
     <div className="section">
@@ -371,15 +493,21 @@ function ImageEditor() {
       <Toolbar/>
       <Jobsbar/>
       <div id="mouse-coordinator">
+        <MouseCoordinator imgRef={imageRef}/>
         <Stage
-          width={size.width || window.innerWidth}
-          height={size.height || window.innerHeight}
+          width={imageElement.width}
+          height={imageElement.height}
           ref={ref => {
             stageRef = ref
           }}
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
+          onWheel={wheelHandler}
+          // scaleX={0.5}
+          // scaleY={0.5}
+          // x={200}
+          // y={200}
         >
           <Layer>
             <Image
@@ -387,19 +515,31 @@ function ImageEditor() {
               image={image}
               x={0}
               y={0}
-              width={size.width}
-              height={size.height}
             />
-            {/* PolygonAnnotation에 objList를 map 으로 key에 id 줘서 돌리면 됨 vs PolygonAnnotation에 objList를 그대로 주고 안에서 Group 만들어낼때 map으로 돌리는게 나을수도 */}
+            {/* 작업 하나를 위한 어노테이션 컴포넌트 */}
             <PolygonAnnotation
               points={points}
               flattenedPoints={flattenedPoints}
               handlePointDragMove={handlePointDragMove}
-              handleGroupDragEnd={handleGroupDragEnd}
+              // handleGroupDragEnd={handleGroupDragEnd}
+              // handlePolygonClick={handlePolygonClick}
               // handleMouseOverStartPoint={handleMouseOverStartPoint}
               // handleMouseOutStartPoint={handleMouseOutStartPoint}
-              isFinished={true}
             />
+
+            {/* 작업 된 폴리곤들에 대한 매핑 컴포넌트 */}
+            {plgObjList.map(plgObj =>
+              <PolygonAnnotation
+                plgObj={plgObj}
+                points={plgObj.points}
+                flattenedPoints={flattenedPoints}
+                handlePointDragMove={handlePointDragMove}
+                handlePolygonClick={handlePolygonClick}
+                // handleGroupDragEnd={handleGroupDragEnd}
+                // handleMouseOverStartPoint={handleMouseOverStartPoint}
+                // handleMouseOutStartPoint={handleMouseOutStartPoint}
+              />
+            )}
           </Layer>
         </Stage>
       </div>

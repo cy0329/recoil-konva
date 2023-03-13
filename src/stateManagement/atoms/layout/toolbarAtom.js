@@ -8,5 +8,5 @@ export const toolbarIsOpenState = atom({
 
 export const toolbarCoordinateState = atom({
   key: 'toolbar/toolbarCoordinate',
-  default: {x:-320, y:0}
+  default: {x: -320, y:0}
 })

@@ -42,14 +42,14 @@ function ImageFilters() {
       <Slider id="contrast" min={0} max={200} startPoint={100} defaultValue={100} value={contrast}
               disabled={!toolbarIsOpen}
               onChange={e => setContrast(e)}/>
-      <label htmlFor="hue">색상 {hue}º</label>
-      <Slider id="hue" min={0} max={360} startPoint={0} defaultValue={0} value={hue}
-              disabled={!toolbarIsOpen}
-              onChange={e => setHue(e)}/>
       <label htmlFor="brightness">밝기 {brightness}%</label>
       <Slider id="brightness" min={0} max={200} startPoint={100} defaultValue={100} value={brightness}
               disabled={!toolbarIsOpen}
               onChange={e => setBrightness(e)}/>
+      <label htmlFor="hue">색상 {hue}º</label>
+      <Slider id="hue" min={0} max={360} startPoint={0} defaultValue={0} value={hue}
+              disabled={!toolbarIsOpen}
+              onChange={e => setHue(e)}/>
       <label htmlFor="saturation">채도 {saturation}%</label>
       <Slider id="saturation" min={0} max={100} startPoint={100} defaultValue={100} value={saturation}
               disabled={!toolbarIsOpen}
