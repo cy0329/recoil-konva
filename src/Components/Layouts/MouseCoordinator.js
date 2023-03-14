@@ -18,7 +18,7 @@ function MouseCoordinator({imgRef}) {
     hLineRef.current.width = imgEl.width;
     vLineRef.current.height = imgEl.height;
 
-    console.log()
+    // console.log(imgRef)
 
     mouseCd.mousemove(function (event) {
 

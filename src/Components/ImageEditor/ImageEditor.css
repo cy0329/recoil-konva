@@ -8,9 +8,3 @@
 canvas {
     position: absolute;
 }
-
-#mouse-coordinator {
-    /*position: absolute;*/
-    /*z-index: 0;*/
-    margin-top: 21px;
-}

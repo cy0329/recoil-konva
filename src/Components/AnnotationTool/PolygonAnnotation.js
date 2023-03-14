@@ -24,6 +24,7 @@ const PolygonAnnotation = (props) => {
     flattenedPoints,
     handlePointDragMove,
     handlePolygonClick,
+    scaleRatio,
     // handleMouseOverStartPoint,
     // handleMouseOutStartPoint,
   } = props;
@@ -46,6 +47,7 @@ const PolygonAnnotation = (props) => {
   // console.log("flattenedPoints : ", flattenedPoints)
   // console.log("points: ", points)
   // console.log(stage)
+  // console.log("scaleRatio in polygon : ", scaleRatio)
   // ===================================
 
 
@@ -116,11 +118,13 @@ const PolygonAnnotation = (props) => {
       name="polygon"
       dragBoundFunc={groupDragBound}
       onMouseOver={handleGroupMouseOver}
+      scaleX={scaleRatio}
+      scaleY={scaleRatio}
     >
       <Line
-        points={flatPoints.length > 0 ? flatPoints : flattenedPoints}
+        points={flatPoints}
         stroke="#01F1FF"
-        strokeWidth={2}
+        strokeWidth={2 / scaleRatio}
         closed={true}
         fill="rgb(140,30,255,0.5)"
         onClick={e => handlePolygonClick({e, key: plgObj ? plgObj.key : null})}
@@ -147,10 +151,10 @@ const PolygonAnnotation = (props) => {
             key={index}
             x={x}
             y={y}
-            radius={vertexRadius}
+            radius={vertexRadius / scaleRatio}
             fill={index === selIndex ? "white" : "#FF019A"}
             stroke={index === selIndex ? "black" : "#00F1FF"}
-            strokeWidth={2}
+            strokeWidth={2 / scaleRatio}
             draggable
             onDragMove={e => handlePointDragMove(e, plgObj.key)}
             onMouseOver={handleCircleMouseOver}

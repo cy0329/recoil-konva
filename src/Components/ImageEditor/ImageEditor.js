@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 import {useRecoilState, useRecoilValue} from "recoil";
 
@@ -28,7 +28,6 @@ function ImageEditor() {
 
   // let renderCount = 0
   // let polygonKey = 0
-  const renderCount = useRef(0)
   const polygonKey = useRef(0)
 
   const colorThreshold = 15;
@@ -36,8 +35,15 @@ function ImageEditor() {
   // local state -> recoil 로 변경할 예정
   const [image, setImage] = useState();
   const [points, setPoints] = useState([]);
+  const [scaledPoints, setScaledPoints] = useState([])
   const [flattenedPoints, setFlattenedPoints] = useState([]);
   const [curTrsh, setCurTrsh] = useState(colorThreshold)
+  const [scaleRatio, setScaleRatio] = useState(1)
+  // const [oldScale, setOldScale] = useState(1)
+  const [stagePos, setStagePos] = useState({x: 0, y: 0})
+
+  const [firstPoints, setFirstPoints] = useState([])
+  const [firstScale, setFirstScale] = useState(1)
 
   // recoil state
   const [imageInfo, setImageInfo] = useRecoilState(imageInfoState)
@@ -54,6 +60,7 @@ function ImageEditor() {
 
   const mask = useRef(null)
   const oldMask = useRef(null)
+  const oldScale = useRef(1)
 
   // 누끼에서 필요한 변수들 (상태값이면 안됨)
   // let colorThreshold = 15;
@@ -73,8 +80,11 @@ function ImageEditor() {
   // console.log("imageWidth, height : ", imageWidth, imageHeight)
   // console.log("oldMask: ", oldMask)
   // console.log("addMode: ", addMode)
-  console.log("plgObjList: ", plgObjList)
+  // console.log("plgObjList: ", plgObjList)
   // console.log("selIndex: ", selIndex)
+  // console.log("scaleRatio: ", scaleRatio)
+  // console.log("oldScale: ", oldScale)
+  console.log(mask)
   // -------------------------
 
 
@@ -143,19 +153,22 @@ function ImageEditor() {
    */
   const filteredImage = useMemo(() => {
     const cvsEl = document.createElement("canvas", {is: "tempCanvas"})
-    cvsEl.width = imageElement.width;
-    cvsEl.height = imageElement.height;
+    const scaledWidth = imageElement.width * scaleRatio
+    const scaledHeight = imageElement.height * scaleRatio
+    // console.log(scaledWidth, scaledHeight, imageElement.width, imageElement.height)
+    cvsEl.width = scaledWidth;
+    cvsEl.height = scaledHeight;
     const ctx = cvsEl.getContext('2d')
-    ctx.drawImage(imageElement, 0, 0, imageElement.width, imageElement.height)
-    const data = ctx.getImageData(0, 0, imageElement.width, imageElement.height);
+    ctx.drawImage(imageElement, 0, 0, scaledWidth, scaledHeight)
+    const data = ctx.getImageData(0, 0, scaledWidth, scaledHeight);
     // 이미지 데이터는 필터 안들어가게 먼저 뽑아주고
 
-    ctx.clearRect(0, 0, imageElement.width, imageElement.height)
+    ctx.clearRect(0, 0, scaledWidth, scaledHeight)
     ctx.filter = filter
-    ctx.drawImage(imageElement, 0, 0, imageElement.width, imageElement.height)
+    ctx.drawImage(imageElement, 0, 0, scaledWidth, scaledHeight)
     // 리턴할 캔버스 엘리먼트는 필터링 적용되도록
     return {cvsEl, data}
-  }, [imageElement, filter])
+  }, [imageElement, filter, scaleRatio])
 
 
   /**
@@ -206,12 +219,14 @@ function ImageEditor() {
       } else if (e.key === ' ' && e.code === 'Space') {
         polygonKey.current++
         if (points.length === 0) return;
-        let plgObj = {key: polygonKey.current, points: points, selected: false}
+        let scaledPoints = points.map(point => {return {x: Math.round(point.x / scaleRatio), y: Math.round(point.y / scaleRatio)}})
+        let plgObj = {key: polygonKey.current, points: scaledPoints, selected: false}
         let copyPlgObjList = [...plgObjList, plgObj]
         setPlgObjList(copyPlgObjList)
         setPoints([])
       } else if (e.key === 'c') {
         setPoints([])
+        setFirstPoints([])
       } else if (e.key === 'd') {
         let copyPlgList = [...plgObjList]
 
@@ -255,20 +270,53 @@ function ImageEditor() {
     }
   }, [nukkiMode, points, plgObjList, selIndex])
 
+  /**
+   * 휠 줌인/아웃 이벤트 관련
+   * scaleRatio 변경 시마다 points 에도 scaling 적용
+   */
+  useEffect(() => {
+    let newPoints = firstPoints.map(point => {return {x: Math.round((point.x)/ firstScale * scaleRatio), y: Math.round((point.y)/ firstScale * scaleRatio )}})
+    setPoints(newPoints)
 
-  const wheelHandler = (e) => {
-    console.log(e.evt.wheelDeltaY)
-  }
+  }, [imageInfo, firstPoints, scaleRatio, stagePos])
+
+  const wheelHandler = useCallback((e) => {
+    e.evt.preventDefault();
+
+    oldScale.current = scaleRatio
+
+    let pointer = e.target.getStage().getPointerPosition();
+    let mousePointTo = {
+      x: (pointer.x - e.target.getStage().x()) / oldScale.current,
+      y: (pointer.y - e.target.getStage().y()) / oldScale.current,
+    }
+
+    let newScale = parseFloat((scaleRatio + e.evt.wheelDelta / 1200).toFixed(1))
+    let newPos = {
+      x: pointer.x - mousePointTo.x * newScale,
+      y: pointer.y - mousePointTo.y * newScale,
+    };
+
+    if (newScale > 1 && newScale <= 3) {
+      setScaleRatio(newScale)
+      setStagePos(newPos)
+    } else if (newScale === 1) {
+      setScaleRatio(newScale)
+      setStagePos({x: 0, y: 0})
+    }
+  }, [oldScale, scaleRatio, stagePos])
+
+
 
   /**
-   * 마우스 좌표
+   * 마우스 좌표 얻기
    */
-  function getMousePosition() {
-    let stage = stageRef.getStage()
-    // let stage = e.target.getStage()
+  const getMousePosition = useCallback((e) => {
+    // let stage = stageRef.getStage()
+    let stage = e.target.getStage()
     let position = stage.getPointerPosition()
-    return {x: Math.round(position.x), y: Math.round(position.y)}
-  }
+    return {x: Math.round(position.x - stagePos.x), y: Math.round(position.y - stagePos.y)}
+  }, [stageRef, scaleRatio])
 
 
   /**
@@ -279,11 +327,16 @@ function ImageEditor() {
       if (nukkiMode) {
         setAllowDraw(true)
         setAddMode(e.evt.ctrlKey)
-        setDownPoint(getMousePosition())
+        setDownPoint(getMousePosition(e))
+        console.log("mouseDown pos: ", getMousePosition(e))
       }
     } else if (e.evt.button === 0 && allowDraw) {
       setAllowDraw(false)
       setDownPoint(null)
+    } else if (e.evt.button === 2) {
+      console.log(e)
+    } else {
+      console.log(e)
     }
   }
 
@@ -293,7 +346,7 @@ function ImageEditor() {
   function onMouseMove(e) {
     if (allowDraw) {
 
-      let p = getMousePosition();
+      let p = getMousePosition(e);
       if (p.x !== downPoint.x || p.y !== downPoint.y) {
         let dx = p.x - downPoint.x,
           dy = p.y - downPoint.y,
@@ -340,6 +393,7 @@ function ImageEditor() {
       bytes: 4
     };
 
+    console.log("maskingImg: ", maskingImg)
     if (addMode && !oldMask.current) {
       oldMask.current = mask.current;
     }
@@ -368,6 +422,9 @@ function ImageEditor() {
 
     // setTempCs(cs[0].points)
     setPoints(cs[0].points.slice(0, -1))
+
+    setFirstPoints(cs[0].points.slice(0, -1))
+    setFirstScale(scaleRatio)
   }
 
   /**
@@ -430,13 +487,13 @@ function ImageEditor() {
 
   /**
    * 폴리곤 꼭짓점 이동
+   * TODO: 이 드래그 이벤트에도 스케일링 먹여야함
    */
-  const handlePointDragMove = (e, key) => {
-    console.log("key: ", key)
+  const handlePointDragMove = useCallback((e, key) => {
     const stage = e.currentTarget.getStage();
     const index = e.currentTarget.index - 1;
     setSelIndex(index)
-    const pos = [e.currentTarget._lastPos.x, e.currentTarget._lastPos.y];
+    const pos = [e.currentTarget._lastPos.x / scaleRatio, e.currentTarget._lastPos.y / scaleRatio];
     if (pos[0] < 0) pos[0] = 0;
     if (pos[1] < 0) pos[1] = 0;
     if (pos[0] > stage.width()) pos[0] = stage.width();
@@ -457,7 +514,7 @@ function ImageEditor() {
 
     setPlgObjList(copyPlgObjList)
     // setPoints([...points.slice(0, index), newPos, ...points.slice(index + 1)]);
-  };
+  }, [plgObjList, scaleRatio]);
 
   const handlePolygonClick = ({e, key}) => {
     setNukkiMode(false)
@@ -550,14 +607,13 @@ function ImageEditor() {
           ref={ref => {
             stageRef = ref
           }}
+          // ref={stageRef}
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
           onWheel={wheelHandler}
-          // scaleX={2}
-          // scaleY={2}
-          // x={0}
-          // y={0}
+          x={stagePos.x}
+          y={stagePos.y}
         >
           <Layer>
             <Image
@@ -571,10 +627,6 @@ function ImageEditor() {
               points={points}
               flattenedPoints={flattenedPoints}
               handlePointDragMove={handlePointDragMove}
-              // handleGroupDragEnd={handleGroupDragEnd}
-              // handlePolygonClick={handlePolygonClick}
-              // handleMouseOverStartPoint={handleMouseOverStartPoint}
-              // handleMouseOutStartPoint={handleMouseOutStartPoint}
             />
 
             {/* 작업 된 폴리곤들에 대한 매핑 컴포넌트 */}
@@ -582,12 +634,9 @@ function ImageEditor() {
               <PolygonAnnotation
                 plgObj={plgObj}
                 points={plgObj.points}
-                flattenedPoints={flattenedPoints}
                 handlePointDragMove={handlePointDragMove}
                 handlePolygonClick={handlePolygonClick}
-                // handleGroupDragEnd={handleGroupDragEnd}
-                // handleMouseOverStartPoint={handleMouseOverStartPoint}
-                // handleMouseOutStartPoint={handleMouseOutStartPoint}
+                scaleRatio={scaleRatio}
               />
             )}
           </Layer>
