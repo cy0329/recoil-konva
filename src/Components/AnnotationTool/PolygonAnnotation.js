@@ -3,11 +3,11 @@ import {Line, Circle, Group} from "react-konva";
 import {minMax, dragBoundFunc} from "../../utils/canvas";
 import {useRecoilState, useRecoilValue, useSetRecoilState} from "recoil";
 import {
-  imageInfoState,
   nukkiModeState,
 } from "../../stateManagement/atoms/Nukki/nukkiAtom";
 import maskingCursor from "../../assets/masking-cursor.png";
 import {polygonObjListState, selectedIndexState} from "../../stateManagement/atoms/Nukki/polygonAtom";
+import {imageInfoState} from "../../stateManagement/atoms/Nukki/editorAtom";
 
 
 /**
@@ -48,6 +48,7 @@ const PolygonAnnotation = (props) => {
   // console.log("points: ", points)
   // console.log(stage)
   // console.log("scaleRatio in polygon : ", scaleRatio)
+  // console.log("selIndex: ", selIndex)
   // ===================================
 
 
@@ -126,7 +127,7 @@ const PolygonAnnotation = (props) => {
         stroke="#01F1FF"
         strokeWidth={2 / scaleRatio}
         closed={true}
-        fill="rgb(140,30,255,0.5)"
+        fill="rgb(40,200,55,0.5)"
         onClick={e => handlePolygonClick({e, key: plgObj ? plgObj.key : null})}
         onMouseOver={handlePolygonMouseOver}
         onMouseOut={handlePolygonMouseOut}

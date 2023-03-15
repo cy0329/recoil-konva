@@ -11,15 +11,6 @@ export const csState = atom({
   default: [{points: []}],
 })
 
-export const imageInfoState = atom({
-  key: 'nukki/imageInfo',
-  default: {},
-})
-
-export const imgRefState = atom({
-  key: 'nukki/imageRef',
-  default: null
-})
 
 export const allowDrawState = atom({
   key: 'nukki/allowDraw',

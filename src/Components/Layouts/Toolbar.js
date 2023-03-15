@@ -66,6 +66,21 @@ function Toolbar() {
           <div>
             <ImageFilters />
           </div>
+          <div>
+            &lt;단축키 설명&gt;
+            <br/>
+            A: 모드 변경 (마스킹모드 / 컨트롤모드)
+            <br/>
+            D: 선택한 꼭짓점 삭제
+            <br/>
+            C: 등록 안 된 마스킹 삭제
+            <br/>
+            SpaceBar: 마스킹을 폴리곤으로 등록
+            <br/>
+            Del: 선택된 폴리곤 삭제
+            <br/>
+            Esc: 꼭짓점 선택 해제
+          </div>
         </div>
       </div>
     </Draggable>
