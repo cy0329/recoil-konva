@@ -612,17 +612,17 @@ function ImageEditor() {
         // 여기서 기울기 1 이상, 이하로 나눠야 함
         if (incl >= 1 || incl <= -1) {
           // 좌상 -> 우하
-          let nsx1 = startX + 4
+          let nsx1 = startX + 2
           let nsy1 = newIncl * nsx1 + newConstStart
-          let nsx2 = startX - 4
+          let nsx2 = startX - 2
           let nsy2 = newIncl * nsx2 + newConstStart
 
           let rectPoint1 = {x: nsx1, y: nsy1}
           let rectPoint2 = {x: nsx2, y: nsy2}
 
-          let nex1 = endX + 4
+          let nex1 = endX + 2
           let ney1 = newIncl * nex1 + newConstEnd
-          let nex2 = endX - 4
+          let nex2 = endX - 2
           let ney2 = newIncl * nex2 + newConstEnd
 
           let rectPoint3 = {x: nex1, y: ney1}
@@ -646,17 +646,17 @@ function ImageEditor() {
           }
         } else if ((incl < 1 && incl > 0) || (incl < 0 && incl > -1)) {
           // 좌상 -> 우하
-          let nsy1 = startY + 4
+          let nsy1 = startY + 2
           let nsx1 = (nsy1 - newConstStart) / newIncl
-          let nsy2 = startY - 4
+          let nsy2 = startY - 2
           let nsx2 = (nsy2 - newConstStart) / newIncl
 
           let rectPoint1 = {x: nsx1, y: nsy1}
           let rectPoint2 = {x: nsx2, y: nsy2}
 
-          let ney1 = endY + 4
+          let ney1 = endY + 2
           let nex1 = (ney1 - newConstEnd) / newIncl
-          let ney2 = endY - 4
+          let ney2 = endY - 2
           let nex2 = (ney2 - newConstEnd) / newIncl
 
           let rectPoint3 = {x: nex1, y: ney1}
@@ -676,17 +676,17 @@ function ImageEditor() {
           }
         } else if (incl === 0) {
           // 수평
-          let nsy1 = startY + 4
+          let nsy1 = startY + 2
           let nsx1 = startX
-          let nsy2 = startY - 4
+          let nsy2 = startY - 2
           let nsx2 = startX
 
           let rectPoint1 = {x: nsx1, y: nsy1}
           let rectPoint2 = {x: nsx2, y: nsy2}
 
-          let ney1 = endY + 4
+          let ney1 = endY + 2
           let nex1 = endX
-          let ney2 = endY - 4
+          let ney2 = endY - 2
           let nex2 = endX
 
           let rectPoint3 = {x: nex1, y: ney1}
@@ -707,17 +707,17 @@ function ImageEditor() {
 
         } else if (incl === Infinity) {
           // 수직
-          let nsx1 = startX + 4
+          let nsx1 = startX + 2
           let nsy1 = startY
-          let nsx2 = startX - 4
+          let nsx2 = startX - 2
           let nsy2 = startY
 
           let rectPoint1 = {x: nsx1, y: nsy1}
           let rectPoint2 = {x: nsx2, y: nsy2}
 
-          let nex1 = endX + 4
+          let nex1 = endX + 2
           let ney1 = endY
-          let nex2 = endX - 4
+          let nex2 = endX - 2
           let ney2 = endY
 
           let rectPoint3 = {x: nex1, y: ney1}
