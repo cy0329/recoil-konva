@@ -581,7 +581,7 @@ function ImageEditor() {
         x: (position.x - stageX) / scaleRatio,
         y: (position.y - stageY) / scaleRatio
       }
-      let mx = Math.round(mousePos.x)
+      let mx = mousePos.x
       let my = mousePos.y
 
       // 1) 폴리곤 특성 상, 제일 가까운 점, 기울기가 같은 직선 이런거 따져서 할 수가 없음
@@ -589,7 +589,6 @@ function ImageEditor() {
       let points = selectedPolygon.points
       let addPointIndex;
       let addingPoint;
-      let inclDiff;
 
       console.log(plgObjList)
       console.log("mx, my: ", mx, my)
@@ -599,47 +598,146 @@ function ImageEditor() {
         const endX = points[(i + 1) % points.length].x
         const endY = points[(i + 1) % points.length].y
 
-        if (((startX <= mx && mx <= endX) || (endX <= mx && mx <= startX)) && ((startY <= my && my <= endY) || (endY <= my && my <= startY))) {
-          // 여기서 기울기 한번 따져줘야함
-          let inclSE = Math.abs(Math.round((endY - startY) / (endX - startX) * 100) / 100)
-          let inclSM = Math.abs(Math.round((my - startY) / (mx - startX) * 100) / 100)
-          console.log(i, "번째")
-          console.log("inclSE: ", inclSE)
-          console.log("inclSM: ", inclSM)
-          // 기울기의 차이가 가장 작은 것을 저장해야함
-          if (inclDiff === undefined || Math.abs(inclSE - inclSM) < inclDiff) {
-            inclDiff = Math.abs(inclSE - inclSM)
-          }
-          // else if (inclSE === Infinity) {
-          //   addPointIndex = i + 1
-          //   addingPoint = mousePos
-          // }
-          // console.log("inclDiff after: ", inclDiff)
+        // 여기서 기울기 한번 따져줘야함
 
+        // 1. 일반적인 상황
+        const incl = (endY - startY) / (endX - startX)
+        console.log("기울기: ", incl)
+        const newIncl = -(1 / incl)
+        // y =  뉴기울기 * x + 새직선상수
+        // startY = 뉴기울기 * startX + 새직선상수
+        const newConstStart = startY - newIncl * startX
+        const newConstEnd = endY - newIncl * endX
 
-          if (inclSE === Infinity || inclSM === Infinity) {
+        // 여기서 기울기 1 이상, 이하로 나눠야 함
+        if (incl >= 1 || incl <= -1) {
+          // 좌상 -> 우하
+          let nsx1 = startX + 4
+          let nsy1 = newIncl * nsx1 + newConstStart
+          let nsx2 = startX - 4
+          let nsy2 = newIncl * nsx2 + newConstStart
+
+          let rectPoint1 = {x: nsx1, y: nsy1}
+          let rectPoint2 = {x: nsx2, y: nsy2}
+
+          let nex1 = endX + 4
+          let ney1 = newIncl * nex1 + newConstEnd
+          let nex2 = endX - 4
+          let ney2 = newIncl * nex2 + newConstEnd
+
+          let rectPoint3 = {x: nex1, y: ney1}
+          let rectPoint4 = {x: nex2, y: ney2}
+
+          // 1 -> 3 -> 4 -> 2 rect
+          // let rectPoints = [rectPoint1, rectPoint3, rectPoint4, rectPoint2]
+          // console.log("rectPoints: ", rectPoints)
+          let tempRectCanvas = document.createElement("canvas", {is: "tempRectCanvas"})
+          let tempRect = new Path2D()
+          tempRect.moveTo(rectPoint1.x, rectPoint1.y)
+          tempRect.lineTo(rectPoint3.x, rectPoint3.y)
+          tempRect.lineTo(rectPoint4.x, rectPoint4.y)
+          tempRect.lineTo(rectPoint2.x, rectPoint2.y)
+          tempRect.closePath()
+
+          // console.log(" ? ", tempRectCanvas.getContext('2d').isPointInPath(tempRect, mx, my))
+          if (tempRectCanvas.getContext('2d').isPointInPath(tempRect, mx, my)) {
             addPointIndex = i + 1
             addingPoint = mousePos
-          } else if (inclSE > 2 && inclSE !== Infinity) {
-            if (inclSM <= inclSE + 1 && inclSM >= inclSE - 1) {
-              addPointIndex = i + 1
-              addingPoint = mousePos
-            }
-          } else if (1 < inclSE <= 2) {
-            if (inclSM <= inclSE + 0.99 && inclSM >= inclSE - 0.99) {
-              addPointIndex = i + 1
-              addingPoint = mousePos
-            }
-          } else if (0.5 < inclSE <= 1) {
-            if (inclSM <= inclSE + 0.49 && inclSM >= inclSE - 0.49) {
-              addPointIndex = i + 1
-              addingPoint = mousePos
-            }
-          } else {
-            if (inclSM <= inclSE + 0.25 && inclSM >= inclSE - 0.25) {
-              addPointIndex = i + 1
-              addingPoint = mousePos
-            }
+          }
+        } else if ((incl < 1 && incl > 0) || (incl < 0 && incl > -1)) {
+          // 좌상 -> 우하
+          let nsy1 = startY + 4
+          let nsx1 = (nsy1 - newConstStart) / newIncl
+          let nsy2 = startY - 4
+          let nsx2 = (nsy2 - newConstStart) / newIncl
+
+          let rectPoint1 = {x: nsx1, y: nsy1}
+          let rectPoint2 = {x: nsx2, y: nsy2}
+
+          let ney1 = endY + 4
+          let nex1 = (ney1 - newConstEnd) / newIncl
+          let ney2 = endY - 4
+          let nex2 = (ney2 - newConstEnd) / newIncl
+
+          let rectPoint3 = {x: nex1, y: ney1}
+          let rectPoint4 = {x: nex2, y: ney2}
+
+          let tempRectCanvas = document.createElement("canvas", {is: "tempRectCanvas"})
+          let tempRect = new Path2D()
+          tempRect.moveTo(rectPoint1.x, rectPoint1.y)
+          tempRect.lineTo(rectPoint3.x, rectPoint3.y)
+          tempRect.lineTo(rectPoint4.x, rectPoint4.y)
+          tempRect.lineTo(rectPoint2.x, rectPoint2.y)
+          tempRect.closePath()
+
+          if (tempRectCanvas.getContext('2d').isPointInPath(tempRect, mx, my)) {
+            addPointIndex = i + 1
+            addingPoint = mousePos
+          }
+        } else if (incl === 0) {
+          // 수평
+          let nsy1 = startY + 4
+          let nsx1 = startX
+          let nsy2 = startY - 4
+          let nsx2 = startX
+
+          let rectPoint1 = {x: nsx1, y: nsy1}
+          let rectPoint2 = {x: nsx2, y: nsy2}
+
+          let ney1 = endY + 4
+          let nex1 = endX
+          let ney2 = endY - 4
+          let nex2 = endX
+
+          let rectPoint3 = {x: nex1, y: ney1}
+          let rectPoint4 = {x: nex2, y: ney2}
+
+          let tempRectCanvas = document.createElement("canvas", {is: "tempRectCanvas"})
+          let tempRect = new Path2D()
+          tempRect.moveTo(rectPoint1.x, rectPoint1.y)
+          tempRect.lineTo(rectPoint3.x, rectPoint3.y)
+          tempRect.lineTo(rectPoint4.x, rectPoint4.y)
+          tempRect.lineTo(rectPoint2.x, rectPoint2.y)
+          tempRect.closePath()
+
+          if (tempRectCanvas.getContext('2d').isPointInPath(tempRect, mx, my)) {
+            addPointIndex = i + 1
+            addingPoint = mousePos
+          }
+
+        } else if (incl === Infinity) {
+          // 수직
+          let nsx1 = startX + 4
+          let nsy1 = startY
+          let nsx2 = startX - 4
+          let nsy2 = startY
+
+          let rectPoint1 = {x: nsx1, y: nsy1}
+          let rectPoint2 = {x: nsx2, y: nsy2}
+
+          let nex1 = endX + 4
+          let ney1 = endY
+          let nex2 = endX - 4
+          let ney2 = endY
+
+          let rectPoint3 = {x: nex1, y: ney1}
+          let rectPoint4 = {x: nex2, y: ney2}
+
+          // 1 -> 3 -> 4 -> 2 rect
+          // let rectPoints = [rectPoint1, rectPoint3, rectPoint4, rectPoint2]
+          // console.log("rectPoints: ", rectPoints)
+          let tempRectCanvas = document.createElement("canvas", {is: "tempRectCanvas"})
+          let tempRect = new Path2D()
+          tempRect.moveTo(rectPoint1.x, rectPoint1.y)
+          tempRect.lineTo(rectPoint3.x, rectPoint3.y)
+          tempRect.lineTo(rectPoint4.x, rectPoint4.y)
+          tempRect.lineTo(rectPoint2.x, rectPoint2.y)
+          tempRect.closePath()
+
+          // console.log(" ? ", tempRectCanvas.getContext('2d').isPointInPath(tempRect, mx, my))
+          if (tempRectCanvas.getContext('2d').isPointInPath(tempRect, mx, my)) {
+            addPointIndex = i + 1
+            addingPoint = mousePos
           }
         }
       }
