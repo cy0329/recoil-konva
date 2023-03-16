@@ -7,7 +7,7 @@ import {
 } from "../../stateManagement/atoms/Nukki/nukkiAtom";
 import maskingCursor from "../../assets/masking-cursor.png";
 import {polygonObjListState, selectedIndexState} from "../../stateManagement/atoms/Nukki/polygonAtom";
-import {imageInfoState} from "../../stateManagement/atoms/Nukki/editorAtom";
+import {imageInfoState, stageXState, stageYState} from "../../stateManagement/atoms/Nukki/editorAtom";
 
 
 /**
@@ -33,12 +33,12 @@ const PolygonAnnotation = (props) => {
 
   const [stage, setStage] = useState();
   const [flatPoints, setFlatPoints] = useState([]);
-  // const [minDist, setMinDist] = useState(0);
 
-  const [plgObjList, setPlgObjList] = useRecoilState(polygonObjListState)
+
   const [selIndex, setSelIndex] = useRecoilState(selectedIndexState);
-  const imageInfo = useRecoilValue(imageInfoState)
   const nukkiMode = useRecoilValue(nukkiModeState)
+  const stageX = useRecoilValue(stageXState)
+  const stageY = useRecoilValue(stageYState)
 
 
 
@@ -132,6 +132,7 @@ const PolygonAnnotation = (props) => {
         onMouseOver={handlePolygonMouseOver}
         onMouseOut={handlePolygonMouseOut}
         hitStrokeWidth={4}
+
       />
       {points.map((point, index) => {
         const x = point.x // - vertexRadius / 2;

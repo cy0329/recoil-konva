@@ -17,7 +17,12 @@ import {
 import PolygonAnnotation from "../AnnotationTool/PolygonAnnotation";
 import {filterState} from "../../stateManagement/atoms/canvasFilter/canvasFilterAtom";
 import {polygonObjListState, selectedIndexState} from "../../stateManagement/atoms/Nukki/polygonAtom";
-import {imageInfoState, scaleRatioState, stagePositionState} from "../../stateManagement/atoms/Nukki/editorAtom";
+import {
+  imageInfoState,
+  scaleRatioState,
+  stagePositionState,
+  stageXState, stageYState
+} from "../../stateManagement/atoms/Nukki/editorAtom";
 
 
 function ImageEditor() {
@@ -45,7 +50,8 @@ function ImageEditor() {
   const [allowDraw, setAllowDraw] = useRecoilState(allowDrawState)
   const [plgObjList, setPlgObjList] = useRecoilState(polygonObjListState)
   const [selIndex, setSelIndex] = useRecoilState(selectedIndexState);
-  const [stagePos, setStagePos] = useRecoilState(stagePositionState)
+  const [stageX, setStageX] = useRecoilState(stageXState)
+  const [stageY, setStageY] = useRecoilState(stageYState)
   const [scaleRatio, setScaleRatio] = useRecoilState(scaleRatioState)
 
   const filter = useRecoilValue(filterState)
@@ -55,6 +61,7 @@ function ImageEditor() {
   const [addMode, setAddMode] = useState(false)
   const [moveMode, setMoveMode] = useState(false)
   const [downPoint, setDownPoint] = useState(null)
+
 
   const mask = useRef(null)
   const oldMask = useRef(null)
@@ -82,6 +89,7 @@ function ImageEditor() {
   document.oncontextmenu = () => {
     return false
   }
+
 
   /**
    * 이미지 그려줄 element 설정, 반환
@@ -207,16 +215,6 @@ function ImageEditor() {
         }
         setPlgObjList(copyPlgList)
         setSelIndex(null)
-      } else if (e.key === ' ' && e.code === 'Space') {
-        polygonKey.current++
-        if (points.length === 0) return;
-        let scaledPoints = points.map(point => {
-          return {x: Math.round(point.x / scaleRatio), y: Math.round(point.y / scaleRatio)}
-        })
-        let plgObj = {key: polygonKey.current, points: scaledPoints, selected: false}
-        let copyPlgObjList = [...plgObjList, plgObj]
-        setPlgObjList(copyPlgObjList)
-        setPoints([])
       } else if (e.key === 'c') {
         setPoints([])
       } else if (e.key === 'd') {
@@ -236,6 +234,18 @@ function ImageEditor() {
 
         setPlgObjList(copyPlgList)
         setSelIndex(null)
+      } else if (e.key === 'r') {
+        setSelIndex(null)
+      } else if (e.key === ' ' && e.code === 'Space') {
+        polygonKey.current++
+        if (points.length === 0) return;
+        let scaledPoints = points.map(point => {
+          return {x: Math.round(point.x / scaleRatio), y: Math.round(point.y / scaleRatio)}
+        })
+        let plgObj = {key: polygonKey.current, points: scaledPoints, selected: false}
+        let copyPlgObjList = [...plgObjList, plgObj]
+        setPlgObjList(copyPlgObjList)
+        setPoints([])
       } else {
         console.log(e)
       }
@@ -249,6 +259,13 @@ function ImageEditor() {
         setPlgObjList(deletedResult)
       } else if (e.key === "Escape") {
         setSelIndex(null)
+        let copyPlgList = [...plgObjList]
+        for (let i = 0; i < copyPlgList.length; i++) {
+          let copyObj = {...copyPlgList[i]}
+          copyObj.selected = false
+          copyPlgList[i] = copyObj
+        }
+        setPlgObjList(copyPlgList)
       } else {
         // console.log("onKeyUp : ", e)
       }
@@ -269,14 +286,9 @@ function ImageEditor() {
    * issue#2) Math.round, Math.ceil, Math.floor 등등 메서드 사용 시마다 정확한 기준점이 달라지는데 이걸로 마스킹을 하면 어차피 원본이 안남음
    */
   useEffect(() => {
-    // let newPoints = firstPoints.map(point => {return {x: Math.round((point.x)/ firstScale * scaleRatio), y: Math.round((point.y)/ firstScale * scaleRatio )}})
     setPoints([])
     mask.current = null
-    /**
-     * 점 수정 기능 고쳐야함
-     */
-
-  }, [scaleRatio, stagePos])
+  }, [scaleRatio, stageX, stageY])
 
   const wheelHandler = useCallback((e) => {
     e.evt.preventDefault();
@@ -285,8 +297,8 @@ function ImageEditor() {
 
     let pointer = e.target.getStage().getPointerPosition();
     let mousePointTo = {
-      x: (pointer.x - stagePos.x) / oldScale.current,
-      y: (pointer.y - stagePos.y) / oldScale.current,
+      x: (pointer.x - stageX) / oldScale.current,
+      y: (pointer.y - stageY) / oldScale.current,
     }
 
     let newScale = parseFloat((scaleRatio + e.evt.wheelDelta / 1200).toFixed(1))
@@ -296,13 +308,21 @@ function ImageEditor() {
     };
 
     if (newScale > 1 && newScale <= 5) {
-      setScaleRatio(newScale)
-      setStagePos(newPos)
+      if (newScale === 2) {
+        setScaleRatio(newScale)
+        setStageX(0)
+        setStageY(0)
+      } else {
+        setScaleRatio(newScale)
+        setStageX(newPos.x)
+        setStageY(newPos.y)
+      }
     } else if (newScale === 1) {
       setScaleRatio(newScale)
-      setStagePos({x: 0, y: 0})
+      setStageX(0)
+      setStageY(0)
     }
-  }, [oldScale, scaleRatio, stagePos, stageRef])
+  }, [oldScale, scaleRatio, stageX, stageY, stageRef])
 
 
   /**
@@ -312,21 +332,18 @@ function ImageEditor() {
     // let stage = stageRef.getStage()
     let stage = e.target.getStage()
     let position = stage.getPointerPosition()
-    return {x: Math.round(position.x - stagePos.x), y: Math.round(position.y - stagePos.y)}
-  }, [stageRef, stagePos])
+    return {x: Math.round(position.x - stageX), y: Math.round(position.y - stageY)}
+  }, [stageRef, stageX, stageY])
 
 
   /**
    * 마우스 클릭 키다운시 필요한 상태값 변경
    */
   function onMouseDown(e) {
-    if (e.evt.button === 0 && !allowDraw) {
-      if (nukkiMode) {
-        setAllowDraw(true)
-        setAddMode(e.evt.ctrlKey)
-        setDownPoint(getMousePosition(e))
-        // console.log("mouseDown pos: ", getMousePosition(e))
-      }
+    if (e.evt.button === 0 && !allowDraw && nukkiMode) {
+      setAllowDraw(true)
+      setAddMode(e.evt.ctrlKey)
+      setDownPoint(getMousePosition(e))
     } else if (e.evt.button === 0 && allowDraw) {
       setDownPoint(null)
     } else if (e.evt.button === 2 && !nukkiMode) {
@@ -334,7 +351,7 @@ function ImageEditor() {
       setDownPoint(scaledDownPoint)
       setMoveMode(true)
     } else {
-      console.log(e)
+      // console.log(e)
     }
   }
 
@@ -362,40 +379,39 @@ function ImageEditor() {
         }
       }
     } else if (e.evt.buttons === 2 && !nukkiMode && moveMode) {
+      // 작업 공간 이동
       let mPos = getMousePosition(e)
       mPos.x = Math.round(mPos.x)
       mPos.y = Math.round(mPos.y)
-      // console.log("mPos: ", mPos)
       let newStagePos = {
-        x: -Math.round((downPoint.x - stagePos.x - mPos.x)),
-        y: -Math.round((downPoint.y - stagePos.y - mPos.y))
+        x: -Math.round((downPoint.x - stageX - mPos.x)),
+        y: -Math.round((downPoint.y - stageY - mPos.y))
       }
 
-      let scaledImage = imageRef.current.attrs.image
+      let scaledImage = imageRef.current.children[0].attrs.image
       let scaledImageSize = {w: scaledImage.width, h: scaledImage.height}
-      console.log("newStagePos: ", newStagePos)
-      console.log("scaledImage w h : ", scaledImageSize)
-      console.log(scaleRatio)
 
       if (scaleRatio >= 2) {
-        setStagePos(newStagePos)
-
-      } else {
-        if (newStagePos.x >= 0) {
-          if (Math.abs(newStagePos.x + scaledImageSize.w / 2) < imageElement.width && Math.abs(newStagePos.y + scaledImageSize.h / 2) < imageElement.height) {
-            setStagePos(newStagePos)
-          }
-        } else {
-          if (Math.abs(newStagePos.x) < scaledImageSize.w / 2 && Math.abs(newStagePos.y) < scaledImageSize.h / 2) {
-            setStagePos(newStagePos)
-          }
+        console.log(imageElement.width, imageElement.height)
+        if (newStagePos.x <= 0 && imageElement.width - newStagePos.x <= scaledImageSize.w) {
+          setStageX(newStagePos.x)
         }
-
+        if (newStagePos.y <= 0 && imageElement.height - newStagePos.y <= scaledImageSize.h) {
+          setStageY(newStagePos.y)
+        }
+      } else {
+        let centerPoint = {
+          x: Math.round(newStagePos.x + scaledImageSize.w / 2),
+          y: Math.round(newStagePos.y + scaledImageSize.h / 2)
+        }
+        let boundary = {x: [0, imageElement.width], y: [0, imageElement.height]}
+        if (centerPoint.x >= boundary.x[0] && centerPoint.x <= boundary.x[1]) {
+          setStageX(newStagePos.x)
+        }
+        if (centerPoint.y >= boundary.y[0] && centerPoint.y <= boundary.y[1]) {
+          setStageY(newStagePos.y)
+        }
       }
-
-      // if (Math.abs(newStagePos.x + scaledImage.attrs.image.width / 2) < imageElement.width && Math.abs(newStagePos.y + scaledImage.attrs.image.height / 2) < imageElement.height) {
-      //   setStagePos(newStagePos)
-      // }
     }
   }
 
@@ -518,7 +534,6 @@ function ImageEditor() {
 
   /**
    * 폴리곤 꼭짓점 이동
-   * TODO: 이 드래그 이벤트에도 스케일링 먹여야함
    */
   const handlePointDragMove = useCallback((e, key) => {
     const stage = e.currentTarget.getStage();
@@ -529,7 +544,7 @@ function ImageEditor() {
     if (pos[1] < 0) pos[1] = 0;
     if (pos[0] > stage.width()) pos[0] = stage.width();
     if (pos[1] > stage.height()) pos[1] = stage.height();
-    const newPos = {x: Math.round(pos[0] - stagePos.x / scaleRatio), y: Math.round(pos[1] - stagePos.y / scaleRatio)}
+    const newPos = {x: pos[0] - stageX / scaleRatio, y: pos[1] - stageY / scaleRatio}
     // console.log(newPos)
     let copyPlgObjList = [...plgObjList]
     let changingPlgObj = {...copyPlgObjList.filter(a => a.key === key)[0]}
@@ -555,7 +570,7 @@ function ImageEditor() {
       copyPlgObj.selected = copyPlgObj.key === key;
       copyPlgObjList[i] = copyPlgObj
     }
-    console.log(copyPlgObjList)
+    // console.log(copyPlgObjList)
     setPlgObjList(copyPlgObjList)
 
 
@@ -563,10 +578,10 @@ function ImageEditor() {
     if (e.evt.altKey) {
       let position = e.target.getStage().getPointerPosition()
       let mousePos = {
-        x: Math.round((position.x - stagePos.x) / scaleRatio),
-        y: Math.round((position.y - stagePos.y) / scaleRatio)
+        x: (position.x - stageX) / scaleRatio,
+        y: (position.y - stageY) / scaleRatio
       }
-      let mx = mousePos.x
+      let mx = Math.round(mousePos.x)
       let my = mousePos.y
 
       // 1) 폴리곤 특성 상, 제일 가까운 점, 기울기가 같은 직선 이런거 따져서 할 수가 없음
@@ -574,6 +589,10 @@ function ImageEditor() {
       let points = selectedPolygon.points
       let addPointIndex;
       let addingPoint;
+      let inclDiff;
+
+      console.log(plgObjList)
+      console.log("mx, my: ", mx, my)
       for (let i = 0; i < points.length; i++) {
         const startX = points[i].x
         const startY = points[i].y
@@ -587,28 +606,37 @@ function ImageEditor() {
           console.log(i, "번째")
           console.log("inclSE: ", inclSE)
           console.log("inclSM: ", inclSM)
+          // 기울기의 차이가 가장 작은 것을 저장해야함
+          if (inclDiff === undefined || Math.abs(inclSE - inclSM) < inclDiff) {
+            inclDiff = Math.abs(inclSE - inclSM)
+          }
+          // else if (inclSE === Infinity) {
+          //   addPointIndex = i + 1
+          //   addingPoint = mousePos
+          // }
+          // console.log("inclDiff after: ", inclDiff)
 
-          if (inclSE > 2) {
+
+          if (inclSE === Infinity || inclSM === Infinity) {
+            addPointIndex = i + 1
+            addingPoint = mousePos
+          } else if (inclSE > 2 && inclSE !== Infinity) {
             if (inclSM <= inclSE + 1 && inclSM >= inclSE - 1) {
-
               addPointIndex = i + 1
               addingPoint = mousePos
             }
           } else if (1 < inclSE <= 2) {
-            if (inclSM <= inclSE + 0.5 && inclSM >= inclSE - 0.5) {
-
+            if (inclSM <= inclSE + 0.99 && inclSM >= inclSE - 0.99) {
               addPointIndex = i + 1
               addingPoint = mousePos
             }
           } else if (0.5 < inclSE <= 1) {
-            if (inclSM <= inclSE + 0.5 && inclSM >= inclSE - 0.5) {
-
+            if (inclSM <= inclSE + 0.49 && inclSM >= inclSE - 0.49) {
               addPointIndex = i + 1
               addingPoint = mousePos
             }
           } else {
-            if (inclSM <= inclSE + 0.1 && inclSM >= inclSE - 0.1) {
-
+            if (inclSM <= inclSE + 0.25 && inclSM >= inclSE - 0.25) {
               addPointIndex = i + 1
               addingPoint = mousePos
             }
@@ -616,7 +644,7 @@ function ImageEditor() {
         }
       }
 
-      // console.log(addPointIndex, addingPoint)
+      console.log(addPointIndex, addingPoint)
 
       if (addPointIndex && addingPoint) {
         let copiedList = [...plgObjList]
@@ -642,7 +670,7 @@ function ImageEditor() {
       <Toolbar/>
       <Jobsbar/>
       <div id="mouse-coordinator">
-        <MouseCoordinator imgRef={imageRef} filteredImage={filteredImage} scaleRatio={scaleRatio} stagePos={stagePos}/>
+        <MouseCoordinator imgRef={imageRef} scaleRatio={scaleRatio}/>
         <Stage
           width={imageElement.width}
           height={imageElement.height}
@@ -654,10 +682,10 @@ function ImageEditor() {
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
           onWheel={wheelHandler}
-          x={stagePos.x}
-          y={stagePos.y}
+          x={stageX}
+          y={stageY}
         >
-          <Layer>
+          <Layer ref={imageRef}>
             <Image
               id="image"
               ref={imageRef}
