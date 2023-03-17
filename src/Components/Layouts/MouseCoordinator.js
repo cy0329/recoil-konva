@@ -4,6 +4,7 @@ import "./MouseCoordinator.css"
 import {useRecoilState, useRecoilValue} from "recoil";
 import {nukkiModeState} from "../../stateManagement/atoms/Nukki/nukkiAtom";
 import {stagePositionState, stageXState, stageYState} from "../../stateManagement/atoms/Nukki/editorAtom";
+import mouseCoordination from "../../utils/canvas";
 
 
 function MouseCoordinator({imgRef, scaleRatio}) {
@@ -13,6 +14,9 @@ function MouseCoordinator({imgRef, scaleRatio}) {
   const nukkiMode = useRecoilValue(nukkiModeState)
   const stageX = useRecoilValue(stageXState)
   const stageY = useRecoilValue(stageYState)
+
+  console.log("점을 움직이는데 얘가 왜 리렌더?")
+
   // new
   useEffect(() => {
     const image = imgRef.current
@@ -25,37 +29,8 @@ function MouseCoordinator({imgRef, scaleRatio}) {
   }, [imgRef.current, scaleRatio, stageX, stageY, nukkiMode])
 
   const mcMouseMove = useCallback(({e, image}) => {
-    $("#tooltip-span").show();
-    $("#vLine").show();
-    $("#hLine").show()
-
-    let stgPntPos = image.getStage().getPointerPosition()
-    let coordinates = {x: Math.round(stgPntPos.x - stageX), y: Math.round(stgPntPos.y - stageY)}
-    let childImage = image.children[0].attrs.image
-    let imageSize = {w: childImage.width, h: childImage.height}
-
-    $("#tooltip-span").html("x : " + coordinates.x + "<br>y : " + coordinates.y + "<br>" + (nukkiMode ? "마스킹 모드" : "컨트롤 모드") + "<br> zoom : " + scaleRatio);
-    let tooltipSpanLeft = (coordinates.x + 35 + $("#tooltip-span").width() > imageSize.w ? stgPntPos.x - $("#tooltip-span").width() - 25 : stgPntPos.x + 25)
-    let tooltipSpanTop = (coordinates.y + 25 + $("#tooltip-span").height() > imageSize.h ? stgPntPos.y - $("#tooltip-span").height() - 20 : stgPntPos.y + 20)
-    $("#tooltip-span").css({
-      "left": tooltipSpanLeft,
-      "top": tooltipSpanTop,
-      "white-space": "nowrap"
-    });
-
-    const originalSize = {w: Math.round(imageSize.w / scaleRatio), h: Math.round(imageSize.h / scaleRatio)}
-
-    $("#vLine").css({
-      left: stgPntPos.x,
-      top: stageY >= 0 ? stageY : 0,
-      height: imageSize.h - Math.abs(stageY) > originalSize.h ? originalSize.h : imageSize.h - Math.abs(stageY)
-    });
-    $("#hLine").css({
-      left: stageX >= 0 ? stageX : 0,
-      top: stgPntPos.y,
-      width: imageSize.w  - Math.abs(stageX) > originalSize.w ? originalSize.w : imageSize.w  - Math.abs(stageX)
-    })
-
+    // 모듈화
+    mouseCoordination({image, nukkiMode, stageX, stageY,scaleRatio})
   }, [stageX, stageY, scaleRatio, nukkiMode])
 
   const mcMouseOut = () => {
@@ -73,4 +48,4 @@ function MouseCoordinator({imgRef, scaleRatio}) {
   )
 }
 
-export default MouseCoordinator
+export const MemoMouseCoordinator = React.memo(MouseCoordinator)

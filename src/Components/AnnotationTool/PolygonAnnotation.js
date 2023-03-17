@@ -3,6 +3,7 @@ import {Line, Circle, Group} from "react-konva";
 import {minMax, dragBoundFunc} from "../../utils/canvas";
 import {useRecoilState, useRecoilValue, useSetRecoilState} from "recoil";
 import {
+  allowDrawState,
   nukkiModeState,
 } from "../../stateManagement/atoms/Nukki/nukkiAtom";
 import maskingCursor from "../../assets/masking-cursor.png";
@@ -36,6 +37,8 @@ const PolygonAnnotation = (props) => {
 
 
   const [selIndex, setSelIndex] = useRecoilState(selectedIndexState);
+  const [allowDraw, setAllowDraw] = useRecoilState(allowDrawState)
+
   const nukkiMode = useRecoilValue(nukkiModeState)
   const stageX = useRecoilValue(stageXState)
   const stageY = useRecoilValue(stageYState)
@@ -119,8 +122,6 @@ const PolygonAnnotation = (props) => {
       name="polygon"
       dragBoundFunc={groupDragBound}
       onMouseOver={handleGroupMouseOver}
-      scaleX={scaleRatio}
-      scaleY={scaleRatio}
     >
       <Line
         points={flatPoints}
@@ -132,7 +133,6 @@ const PolygonAnnotation = (props) => {
         onMouseOver={handlePolygonMouseOver}
         onMouseOut={handlePolygonMouseOut}
         hitStrokeWidth={4}
-
       />
       {points.map((point, index) => {
         const x = point.x // - vertexRadius / 2;
@@ -163,7 +163,7 @@ const PolygonAnnotation = (props) => {
             onMouseOut={handleCircleMouseOut}
             onClick={handleCircleClick}
             dragBoundFunc={(pos) =>
-              dragBoundFunc(stage.width(), stage.height(), vertexRadius, pos)
+              dragBoundFunc(stage.width(), stage.height(),stageX, stageY, scaleRatio, vertexRadius, pos)
             }
           />
         );

@@ -2,27 +2,34 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 import {useRecoilState, useRecoilValue} from "recoil";
 
+import $ from '../../../node_modules/jquery/dist/jquery.min.js';
+
 import Toolbar from "../Layouts/Toolbar";
 import Jobsbar from "../Layouts/Jobsbar";
 import TopMenu from "../Layouts/TopMenu";
-import MouseCoordinator from "../Layouts/MouseCoordinator";
+import MouseCoordinator, {MemoMouseCoordinator} from "../Layouts/MouseCoordinator";
 
 import './ImageEditor.css'
 import {Image, Layer, Stage} from "react-konva";
 import MagicWand from "magic-wand-tool";
-import {
-  allowDrawState,
-  nukkiModeState,
-} from "../../stateManagement/atoms/Nukki/nukkiAtom";
+import {allowDrawState, nukkiModeState,} from "../../stateManagement/atoms/Nukki/nukkiAtom";
 import PolygonAnnotation from "../AnnotationTool/PolygonAnnotation";
 import {filterState} from "../../stateManagement/atoms/canvasFilter/canvasFilterAtom";
-import {polygonObjListState, selectedIndexState} from "../../stateManagement/atoms/Nukki/polygonAtom";
+import {
+  polygonObjListState,
+  renderPolygonObjListState,
+  selectedIndexState
+} from "../../stateManagement/atoms/Nukki/polygonAtom";
 import {
   imageInfoState,
+  newImageRatioState,
+  oldImageRatioState,
+  originImageSizeState,
   scaleRatioState,
-  stagePositionState,
-  stageXState, stageYState
+  stageXState,
+  stageYState
 } from "../../stateManagement/atoms/Nukki/editorAtom";
+import mouseCoordination from "../../utils/canvas";
 
 
 function ImageEditor() {
@@ -49,10 +56,14 @@ function ImageEditor() {
   const [nukkiMode, setNukkiMode] = useRecoilState(nukkiModeState)
   const [allowDraw, setAllowDraw] = useRecoilState(allowDrawState)
   const [plgObjList, setPlgObjList] = useRecoilState(polygonObjListState)
+  const [rndPlgObjList, setRndPlgObjList] = useRecoilState(renderPolygonObjListState)
   const [selIndex, setSelIndex] = useRecoilState(selectedIndexState);
   const [stageX, setStageX] = useRecoilState(stageXState)
   const [stageY, setStageY] = useRecoilState(stageYState)
   const [scaleRatio, setScaleRatio] = useRecoilState(scaleRatioState)
+  const [originImageSize, setOriginImageSize] = useRecoilState(originImageSizeState)
+  const [newImageRatio, setNewImageRatio] = useRecoilState(newImageRatioState)
+  // const [oldImageRatio, setOldImageRatio] = useRecoilState(oldImageRatioState)
 
   const filter = useRecoilValue(filterState)
 
@@ -70,6 +81,9 @@ function ImageEditor() {
   // -----console.log 영역-----
   // renderCount.current++
   // console.log('render', renderCount.current)
+  // console.log("originImageSize: ", originImageSize)
+  // console.log("newImageRatio: ", newImageRatio)
+  // console.log("oldImageRatio: ", oldImageRatio)
   // console.log("image: ", image)
   // console.log("imageInfo : ", imageInfo)
   // console.log("points: ", points)
@@ -78,11 +92,13 @@ function ImageEditor() {
   // console.log("oldMask: ", oldMask)
   // console.log("addMode: ", addMode)
   // console.log("plgObjList: ", plgObjList)
+  // console.log("rndPlgObjList: ", rndPlgObjList)
   // console.log("selIndex: ", selIndex)
   // console.log("scaleRatio: ", scaleRatio)
   // console.log("oldScale: ", oldScale)
   // console.log("moveMode: ", moveMode)
   // console.log("downPoint: ", downPoint)
+  // console.log("maxCanvasWidth: ", maxCanvasWidth, "maxCanvasHeight: ", maxCanvasHeight)
   // -------------------------
 
 
@@ -93,16 +109,34 @@ function ImageEditor() {
 
   /**
    * 이미지 그려줄 element 설정, 반환
+   * + 반응형 ( 마스킹된 points 는 불가 )
    */
+
+    // 아래 주석 코드가 안되는 이유 => points 상태값은 imageElement 사이즈에 따라 조정 가능하지만 mask 는 안됨
+  const [maxCanvasWidth, setMaxCanvasWidth] = useState(window.innerWidth);
+  const [maxCanvasHeight, setMaxCanvasHeight] = useState(window.innerHeight);
+  useEffect(() => {
+    window.addEventListener("resize", () => {
+      setMaxCanvasWidth(window.innerWidth)
+      setMaxCanvasHeight(window.innerHeight)
+      setPoints([])
+      mask.current = null
+    })
+  }, [])
+
   const imageElement = useMemo(() => {
-    const maxCanvasWidth = window.innerWidth;
-    const maxCanvasHeight = window.innerHeight;
+    // const maxCanvasWidth = window.innerWidth
+    // const maxCanvasHeight = window.innerHeight
 
     const imgEl = new window.Image();
     imgEl.src = imgSource;
 
-    let width = 1600;
-    let height = 900;
+    let width;
+    let height;
+
+    let orgWidth = imgEl.width
+    let orgHeight = imgEl.height
+    setOriginImageSize({w: orgWidth, h: orgHeight})
 
     // 이미지 스케일링
     let imageRatio = imgEl.height / imgEl.width
@@ -144,31 +178,54 @@ function ImageEditor() {
 
 
     return imgEl;
-  }, [imgSource])
+  }, [imgSource, maxCanvasWidth, maxCanvasHeight])
+
+  useEffect(() => {
+    let newImgRatio = Math.round((imageElement.width / originImageSize.w) * 1000) / 1000
+    // console.log("heightRatio: ", Math.round(imageElement.height / originImageSize.h * 100) / 100)
+    setNewImageRatio(newImgRatio)
+  }, [imageElement, originImageSize])
+
+  // 윈도우 사이즈 변경으로 이미지 크기 비율 변경될 때마다 폴리곤 포인트들 재조정
+  useEffect(() => {
+    let copyList = [...rndPlgObjList]
+    for (let i = 0; i < copyList.length; i++) {
+      let copyObj = {...copyList[i]}
+      let copyPoints = [...copyObj.points]
+      for (let j = 0; j < copyPoints.length; j++) {
+        let changeRatio = newImageRatio / copyObj.imageRatio
+        // console.log("=== changeRatio : ", changeRatio)
+        // console.log("copyPoint.imageRatio: ", copyObj.imageRatio, typeof copyObj.imageRatio)
+        copyPoints[j] = {x: copyPoints[j].x * changeRatio, y: copyPoints[j].y * changeRatio}
+        copyObj.points = copyPoints
+      }
+      copyList[i] = copyObj
+      copyObj.imageRatio = newImageRatio
+    }
+    setRndPlgObjList(copyList)
+
+  }, [newImageRatio])
 
   /**
    * 그려줄 이미지를 필터를 입혀서 canvas 에 그린 canvas element 로 변경
    */
   const filteredImage = useMemo(() => {
     const cvsEl = document.createElement("canvas", {is: "tempCanvas"})
-    const scaledWidth = Math.round(imageElement.width * scaleRatio)
-    const scaledHeight = Math.round(imageElement.height * scaleRatio)
-    // console.log(scaledWidth, scaledHeight, imageElement.width, imageElement.height)
-    cvsEl.width = scaledWidth;
-    cvsEl.height = scaledHeight;
+    cvsEl.width = imageElement.width;
+    cvsEl.height = imageElement.height;
     const ctx = cvsEl.getContext('2d')
-    ctx.drawImage(imageElement, 0, 0, scaledWidth, scaledHeight)
-    const data = ctx.getImageData(0, 0, scaledWidth, scaledHeight);
+    ctx.drawImage(imageElement, 0, 0, cvsEl.width, cvsEl.height)
+    const data = ctx.getImageData(0, 0, cvsEl.width, cvsEl.height);
     // 이미지 데이터는 필터 안들어가게 먼저 뽑아주고
 
-    ctx.clearRect(0, 0, scaledWidth, scaledHeight)
+    ctx.clearRect(0, 0, cvsEl.width, cvsEl.height)
     ctx.filter = filter
-    ctx.drawImage(imageElement, 0, 0, scaledWidth, scaledHeight)
+    ctx.drawImage(imageElement, 0, 0, cvsEl.width, cvsEl.height)
     // 리턴할 캔버스 엘리먼트는 필터링 적용되도록
 
-    console.log(scaledWidth, scaledHeight)
+    // console.log(cvsEl.width, cvsEl.height)
     return {cvsEl, data}
-  }, [imageElement, filter, scaleRatio])
+  }, [imageElement, filter])
 
   /**
    * 필터링 된 이미지 데이터를 가지고
@@ -205,20 +262,21 @@ function ImageEditor() {
    */
   useEffect(() => {
     function handleKeyPress(e) {
-      if (e.key === 'a') {
-        setNukkiMode(!nukkiMode)
-        let copyPlgList = [...plgObjList]
-        for (let i = 0; i < copyPlgList.length; i++) {
-          let copyObj = {...copyPlgList[i]}
-          copyObj.selected = false
-          copyPlgList[i] = copyObj
-        }
-        setPlgObjList(copyPlgList)
-        setSelIndex(null)
-      } else if (e.key === 'c') {
+      // if (e.key === 'a') {
+      //   setNukkiMode(!nukkiMode)
+      //   let copyPlgList = [...rndPlgObjList]
+      //   for (let i = 0; i < copyPlgList.length; i++) {
+      //     let copyObj = {...copyPlgList[i]}
+      //     copyObj.selected = false
+      //     copyPlgList[i] = copyObj
+      //   }
+      //   setRndPlgObjList(copyPlgList)
+      //   setSelIndex(null)
+      // } else
+      if (e.key === 'c') {
         setPoints([])
       } else if (e.key === 'd') {
-        let copyPlgList = [...plgObjList]
+        let copyPlgList = [...rndPlgObjList]
 
         for (let i = 0; i < copyPlgList.length; i++) {
           if (copyPlgList[i].selected) {
@@ -232,19 +290,31 @@ function ImageEditor() {
           }
         }
 
-        setPlgObjList(copyPlgList)
+        setRndPlgObjList(copyPlgList)
         setSelIndex(null)
+      } else if (e.key === 'f') {
+        setStageX(0)
+        setStageY(0)
+        setScaleRatio(1)
       } else if (e.key === 'r') {
         setSelIndex(null)
       } else if (e.key === ' ' && e.code === 'Space') {
         polygonKey.current++
         if (points.length === 0) return;
         let scaledPoints = points.map(point => {
-          return {x: Math.round(point.x / scaleRatio), y: Math.round(point.y / scaleRatio)}
+          return {x: point.x, y: point.y}
         })
-        let plgObj = {key: polygonKey.current, points: scaledPoints, selected: false}
+        let rndPlgObj = {key: polygonKey.current, points: scaledPoints, selected: false, imageRatio: newImageRatio}
+        let copyRndPlgObjList = [...rndPlgObjList, rndPlgObj]
+        setRndPlgObjList(copyRndPlgObjList)
+
+        let originalSizePoints = points.map(point => {
+          return {x: point.x / newImageRatio, y: point.y / newImageRatio}
+        })
+        let plgObj = {key: polygonKey.current, points: originalSizePoints, selected: false}
         let copyPlgObjList = [...plgObjList, plgObj]
         setPlgObjList(copyPlgObjList)
+
         setPoints([])
       } else {
         console.log(e)
@@ -253,19 +323,21 @@ function ImageEditor() {
 
     function handleKeyUp(e) {
       if (e.key === "Delete") {
-        let copyPlgList = [...plgObjList]
+        let copyPlgList = [...rndPlgObjList]
         let deletedResult = copyPlgList.filter(item => !item.selected)
 
-        setPlgObjList(deletedResult)
+        setRndPlgObjList(deletedResult)
+        setNukkiMode(true)
       } else if (e.key === "Escape") {
-        setSelIndex(null)
-        let copyPlgList = [...plgObjList]
+        let copyPlgList = [...rndPlgObjList]
         for (let i = 0; i < copyPlgList.length; i++) {
           let copyObj = {...copyPlgList[i]}
           copyObj.selected = false
           copyPlgList[i] = copyObj
         }
-        setPlgObjList(copyPlgList)
+        setRndPlgObjList(copyPlgList)
+        setSelIndex(null)
+        setNukkiMode(true)
       } else {
         // console.log("onKeyUp : ", e)
       }
@@ -277,7 +349,7 @@ function ImageEditor() {
       document.removeEventListener('keypress', handleKeyPress)
       document.removeEventListener('keyup', handleKeyUp)
     }
-  }, [nukkiMode, points, plgObjList, selIndex])
+  }, [nukkiMode, points, rndPlgObjList, selIndex, newImageRatio])
 
   /**
    * 휠 줌인/아웃 이벤트 관련
@@ -285,43 +357,43 @@ function ImageEditor() {
    * issue#1) downPoint 가 addmode로 그릴 때에도 바뀜 -> 새로 마스킹 해줄 때 기준이 달라짐 -> oldDownPoint 로 새로운 상태값 해줄 수는 있으나 다음 이슈가 또 문제
    * issue#2) Math.round, Math.ceil, Math.floor 등등 메서드 사용 시마다 정확한 기준점이 달라지는데 이걸로 마스킹을 하면 어차피 원본이 안남음
    */
-  useEffect(() => {
-    setPoints([])
-    mask.current = null
-  }, [scaleRatio, stageX, stageY])
 
   const wheelHandler = useCallback((e) => {
     e.evt.preventDefault();
 
     oldScale.current = scaleRatio
 
-    let pointer = e.target.getStage().getPointerPosition();
-    let mousePointTo = {
-      x: (pointer.x - stageX) / oldScale.current,
-      y: (pointer.y - stageY) / oldScale.current,
-    }
+    let pointerInImage = e.target.attrs.id !== 'stage';
 
-    let newScale = parseFloat((scaleRatio + e.evt.wheelDelta / 1200).toFixed(1))
-    let newPos = {
-      x: Math.round(pointer.x - mousePointTo.x * newScale),
-      y: Math.round(pointer.y - mousePointTo.y * newScale),
-    };
+    if (pointerInImage) {
+      let pointer = e.target.getStage().getPointerPosition();
+      let mousePointTo = {
+        x: Math.round((pointer.x - stageX) / oldScale.current),
+        y: Math.round((pointer.y - stageY) / oldScale.current),
+      }
 
-    if (newScale > 1 && newScale <= 5) {
-      if (newScale === 2) {
+      let newScale = parseFloat((scaleRatio + e.evt.wheelDelta / 1200).toFixed(1))
+      let newPos = {
+        x: Math.round(pointer.x - mousePointTo.x * newScale),
+        y: Math.round(pointer.y - mousePointTo.y * newScale),
+      };
+
+      let centerPoint = {
+        x: Math.round(imageElement.width / 2),
+        y: Math.round(imageElement.height / 2)
+      }
+      let zoomedSize = {w: imageElement.width * newScale, h: imageElement.height * newScale}
+      if (newScale > 1 && newScale <= 5) {
+        setScaleRatio(newScale)
+        setStageX(newPos.x > centerPoint.x ? centerPoint.x : (zoomedSize.w + newPos.x > centerPoint.x ? newPos.x : centerPoint.x - zoomedSize.w))
+        setStageY(newPos.y > centerPoint.y ? centerPoint.y : (zoomedSize.h + newPos.y > centerPoint.y ? newPos.y : centerPoint.y - zoomedSize.h))
+      } else if (newScale === 1) {
         setScaleRatio(newScale)
         setStageX(0)
         setStageY(0)
-      } else {
-        setScaleRatio(newScale)
-        setStageX(newPos.x)
-        setStageY(newPos.y)
       }
-    } else if (newScale === 1) {
-      setScaleRatio(newScale)
-      setStageX(0)
-      setStageY(0)
     }
+
   }, [oldScale, scaleRatio, stageX, stageY, stageRef])
 
 
@@ -332,8 +404,8 @@ function ImageEditor() {
     // let stage = stageRef.getStage()
     let stage = e.target.getStage()
     let position = stage.getPointerPosition()
-    return {x: Math.round(position.x - stageX), y: Math.round(position.y - stageY)}
-  }, [stageRef, stageX, stageY])
+    return {x: Math.round((position.x - stageX) / scaleRatio), y: Math.round((position.y - stageY) / scaleRatio)}
+  }, [stageRef, stageX, stageY, scaleRatio])
 
 
   /**
@@ -344,9 +416,10 @@ function ImageEditor() {
       setAllowDraw(true)
       setAddMode(e.evt.ctrlKey)
       setDownPoint(getMousePosition(e))
+      // console.log(getMousePosition(e))
     } else if (e.evt.button === 0 && allowDraw) {
       setDownPoint(null)
-    } else if (e.evt.button === 2 && !nukkiMode) {
+    } else if (e.evt.button === 2) {
       let scaledDownPoint = getMousePosition(e)
       setDownPoint(scaledDownPoint)
       setMoveMode(true)
@@ -378,39 +451,28 @@ function ImageEditor() {
           drawMask(downPoint.x, downPoint.y);
         }
       }
-    } else if (e.evt.buttons === 2 && !nukkiMode && moveMode) {
+    } else if (e.evt.buttons === 2 && moveMode) {
       // 작업 공간 이동
       let mPos = getMousePosition(e)
       mPos.x = Math.round(mPos.x)
       mPos.y = Math.round(mPos.y)
+
       let newStagePos = {
         x: -Math.round((downPoint.x - stageX - mPos.x)),
         y: -Math.round((downPoint.y - stageY - mPos.y))
       }
 
-      let scaledImage = imageRef.current.children[0].attrs.image
-      let scaledImageSize = {w: scaledImage.width, h: scaledImage.height}
+      let zoomedSize = {w: imageElement.width * scaleRatio, h: imageElement.height * scaleRatio}
 
-      if (scaleRatio >= 2) {
-        console.log(imageElement.width, imageElement.height)
-        if (newStagePos.x <= 0 && imageElement.width - newStagePos.x <= scaledImageSize.w) {
-          setStageX(newStagePos.x)
-        }
-        if (newStagePos.y <= 0 && imageElement.height - newStagePos.y <= scaledImageSize.h) {
-          setStageY(newStagePos.y)
-        }
-      } else {
-        let centerPoint = {
-          x: Math.round(newStagePos.x + scaledImageSize.w / 2),
-          y: Math.round(newStagePos.y + scaledImageSize.h / 2)
-        }
-        let boundary = {x: [0, imageElement.width], y: [0, imageElement.height]}
-        if (centerPoint.x >= boundary.x[0] && centerPoint.x <= boundary.x[1]) {
-          setStageX(newStagePos.x)
-        }
-        if (centerPoint.y >= boundary.y[0] && centerPoint.y <= boundary.y[1]) {
-          setStageY(newStagePos.y)
-        }
+      let centerPoint = {
+        x: Math.round(imageElement.width / 2),
+        y: Math.round(imageElement.height / 2)
+      }
+      if (newStagePos.x < centerPoint.x && newStagePos.x + zoomedSize.w > centerPoint.x) {
+        setStageX(newStagePos.x)
+      }
+      if (newStagePos.y < centerPoint.y && newStagePos.y + zoomedSize.h > centerPoint.y) {
+        setStageY(newStagePos.y)
       }
     }
   }
@@ -465,8 +527,8 @@ function ImageEditor() {
    */
   function trace() {
     if (!mask.current) return;
-    const simplifyTolerant = 3;
-    const simplifyCount = 30;
+    const simplifyTolerant = 1;
+    const simplifyCount = 100;
     let cs = MagicWand.traceContours(mask.current);
     cs = MagicWand.simplifyContours(cs, simplifyTolerant, simplifyCount);
     cs = cs.filter(x => !x.inner);
@@ -539,13 +601,38 @@ function ImageEditor() {
     const stage = e.currentTarget.getStage();
     const index = e.currentTarget.index - 1;
     setSelIndex(index)
-    const pos = [e.currentTarget._lastPos.x / scaleRatio, e.currentTarget._lastPos.y / scaleRatio];
+
+    const pos = [e.currentTarget._lastPos.x, e.currentTarget._lastPos.y];
     if (pos[0] < 0) pos[0] = 0;
     if (pos[1] < 0) pos[1] = 0;
     if (pos[0] > stage.width()) pos[0] = stage.width();
     if (pos[1] > stage.height()) pos[1] = stage.height();
-    const newPos = {x: pos[0] - stageX / scaleRatio, y: pos[1] - stageY / scaleRatio}
-    // console.log(newPos)
+
+    // 렌더링 해줄 폴리곤 설정
+    const newRndPos = {
+      x: (pos[0] - stageX) / scaleRatio >= 0 ? (pos[0] - stageX) / scaleRatio : 0,
+      y: (pos[1] - stageY) / scaleRatio >= 0 ? (pos[1] - stageY) / scaleRatio : 0
+    }
+    let copyRndPlgObjList = [...rndPlgObjList]
+    let changingRndPlgObj = {...copyRndPlgObjList.filter(a => a.key === key)[0]}
+    changingRndPlgObj.points = [...changingRndPlgObj.points.slice(0, index), newRndPos, ...changingRndPlgObj.points.slice(index + 1)]
+
+    for (let i = 0; i < copyRndPlgObjList.length; i++) {
+      let copyRndObj = {...copyRndPlgObjList[i]}
+      if (copyRndObj.key === key) {
+        copyRndObj = changingRndPlgObj
+        copyRndPlgObjList[i] = copyRndObj
+      }
+    }
+
+    setRndPlgObjList(copyRndPlgObjList)
+
+
+    // 저장될 폴리곤 설정
+    const newPos = {
+      x: (pos[0] - stageX / scaleRatio) / newImageRatio,
+      y: (pos[1] - stageY / scaleRatio) / newImageRatio
+    }
     let copyPlgObjList = [...plgObjList]
     let changingPlgObj = {...copyPlgObjList.filter(a => a.key === key)[0]}
     changingPlgObj.points = [...changingPlgObj.points.slice(0, index), newPos, ...changingPlgObj.points.slice(index + 1)]
@@ -559,19 +646,22 @@ function ImageEditor() {
     }
 
     setPlgObjList(copyPlgObjList)
-  }, [plgObjList, scaleRatio]);
+
+    // 드래그 시에도 코디네이터 움직이도록 --> 모듈화
+    mouseCoordination({image: imageRef.current, nukkiMode, stageX, stageY,scaleRatio})
+  }, [rndPlgObjList, scaleRatio, newImageRatio]);
 
   const handlePolygonClick = ({e, key}) => {
     setNukkiMode(false)
     setSelIndex(null)
-    let copyPlgObjList = [...plgObjList]
+    let copyPlgObjList = [...rndPlgObjList]
     for (let i = 0; i < copyPlgObjList.length; i++) {
       let copyPlgObj = {...copyPlgObjList[i]}
       copyPlgObj.selected = copyPlgObj.key === key;
       copyPlgObjList[i] = copyPlgObj
     }
     // console.log(copyPlgObjList)
-    setPlgObjList(copyPlgObjList)
+    setRndPlgObjList(copyPlgObjList)
 
 
     // 꼭짓점 추가
@@ -585,12 +675,12 @@ function ImageEditor() {
       let my = mousePos.y
 
       // 1) 폴리곤 특성 상, 제일 가까운 점, 기울기가 같은 직선 이런거 따져서 할 수가 없음
-      let selectedPolygon = plgObjList.filter(poly => poly.selected)[0]
+      let selectedPolygon = rndPlgObjList.filter(poly => poly.selected)[0]
       let points = selectedPolygon.points
       let addPointIndex;
       let addingPoint;
 
-      console.log(plgObjList)
+      console.log(rndPlgObjList)
       console.log("mx, my: ", mx, my)
       for (let i = 0; i < points.length; i++) {
         const startX = points[i].x
@@ -609,143 +699,83 @@ function ImageEditor() {
         const newConstStart = startY - newIncl * startX
         const newConstEnd = endY - newIncl * endX
 
-        // 여기서 기울기 1 이상, 이하로 나눠야 함
+
+
+
+        // 여기서 기울기 절대값 1 이상, 1 이하, 0, Infinity 로 분기
+        let nsx1, nsx2, nsy1, nsy2, nex1, nex2, ney1, ney2;
         if (incl >= 1 || incl <= -1) {
           // 좌상 -> 우하
-          let nsx1 = startX + 2
-          let nsy1 = newIncl * nsx1 + newConstStart
-          let nsx2 = startX - 2
-          let nsy2 = newIncl * nsx2 + newConstStart
+          nsx1 = startX + 2
+          nsy1 = newIncl * nsx1 + newConstStart
+          nsx2 = startX - 2
+          nsy2 = newIncl * nsx2 + newConstStart
 
-          let rectPoint1 = {x: nsx1, y: nsy1}
-          let rectPoint2 = {x: nsx2, y: nsy2}
-
-          let nex1 = endX + 2
-          let ney1 = newIncl * nex1 + newConstEnd
-          let nex2 = endX - 2
-          let ney2 = newIncl * nex2 + newConstEnd
-
-          let rectPoint3 = {x: nex1, y: ney1}
-          let rectPoint4 = {x: nex2, y: ney2}
-
-          // 1 -> 3 -> 4 -> 2 rect
-          // let rectPoints = [rectPoint1, rectPoint3, rectPoint4, rectPoint2]
-          // console.log("rectPoints: ", rectPoints)
-          let tempRectCanvas = document.createElement("canvas", {is: "tempRectCanvas"})
-          let tempRect = new Path2D()
-          tempRect.moveTo(rectPoint1.x, rectPoint1.y)
-          tempRect.lineTo(rectPoint3.x, rectPoint3.y)
-          tempRect.lineTo(rectPoint4.x, rectPoint4.y)
-          tempRect.lineTo(rectPoint2.x, rectPoint2.y)
-          tempRect.closePath()
-
-          // console.log(" ? ", tempRectCanvas.getContext('2d').isPointInPath(tempRect, mx, my))
-          if (tempRectCanvas.getContext('2d').isPointInPath(tempRect, mx, my)) {
-            addPointIndex = i + 1
-            addingPoint = mousePos
-          }
+          nex1 = endX + 2
+          ney1 = newIncl * nex1 + newConstEnd
+          nex2 = endX - 2
+          ney2 = newIncl * nex2 + newConstEnd
         } else if ((incl < 1 && incl > 0) || (incl < 0 && incl > -1)) {
           // 좌상 -> 우하
-          let nsy1 = startY + 2
-          let nsx1 = (nsy1 - newConstStart) / newIncl
-          let nsy2 = startY - 2
-          let nsx2 = (nsy2 - newConstStart) / newIncl
+          nsy1 = startY + 2
+          nsx1 = (nsy1 - newConstStart) / newIncl
+          nsy2 = startY - 2
+          nsx2 = (nsy2 - newConstStart) / newIncl
 
-          let rectPoint1 = {x: nsx1, y: nsy1}
-          let rectPoint2 = {x: nsx2, y: nsy2}
-
-          let ney1 = endY + 2
-          let nex1 = (ney1 - newConstEnd) / newIncl
-          let ney2 = endY - 2
-          let nex2 = (ney2 - newConstEnd) / newIncl
-
-          let rectPoint3 = {x: nex1, y: ney1}
-          let rectPoint4 = {x: nex2, y: ney2}
-
-          let tempRectCanvas = document.createElement("canvas", {is: "tempRectCanvas"})
-          let tempRect = new Path2D()
-          tempRect.moveTo(rectPoint1.x, rectPoint1.y)
-          tempRect.lineTo(rectPoint3.x, rectPoint3.y)
-          tempRect.lineTo(rectPoint4.x, rectPoint4.y)
-          tempRect.lineTo(rectPoint2.x, rectPoint2.y)
-          tempRect.closePath()
-
-          if (tempRectCanvas.getContext('2d').isPointInPath(tempRect, mx, my)) {
-            addPointIndex = i + 1
-            addingPoint = mousePos
-          }
+          ney1 = endY + 2
+          nex1 = (ney1 - newConstEnd) / newIncl
+          ney2 = endY - 2
+          nex2 = (ney2 - newConstEnd) / newIncl
         } else if (incl === 0) {
           // 수평
-          let nsy1 = startY + 2
-          let nsx1 = startX
-          let nsy2 = startY - 2
-          let nsx2 = startX
+          nsy1 = startY + 2
+          nsx1 = startX
+          nsy2 = startY - 2
+          nsx2 = startX
 
-          let rectPoint1 = {x: nsx1, y: nsy1}
-          let rectPoint2 = {x: nsx2, y: nsy2}
-
-          let ney1 = endY + 2
-          let nex1 = endX
-          let ney2 = endY - 2
-          let nex2 = endX
-
-          let rectPoint3 = {x: nex1, y: ney1}
-          let rectPoint4 = {x: nex2, y: ney2}
-
-          let tempRectCanvas = document.createElement("canvas", {is: "tempRectCanvas"})
-          let tempRect = new Path2D()
-          tempRect.moveTo(rectPoint1.x, rectPoint1.y)
-          tempRect.lineTo(rectPoint3.x, rectPoint3.y)
-          tempRect.lineTo(rectPoint4.x, rectPoint4.y)
-          tempRect.lineTo(rectPoint2.x, rectPoint2.y)
-          tempRect.closePath()
-
-          if (tempRectCanvas.getContext('2d').isPointInPath(tempRect, mx, my)) {
-            addPointIndex = i + 1
-            addingPoint = mousePos
-          }
-
+          ney1 = endY + 2
+          nex1 = endX
+          ney2 = endY - 2
+          nex2 = endX
         } else if (incl === Infinity) {
           // 수직
-          let nsx1 = startX + 2
-          let nsy1 = startY
-          let nsx2 = startX - 2
-          let nsy2 = startY
+          nsx1 = startX + 2
+          nsy1 = startY
+          nsx2 = startX - 2
+          nsy2 = startY
 
-          let rectPoint1 = {x: nsx1, y: nsy1}
-          let rectPoint2 = {x: nsx2, y: nsy2}
+          nex1 = endX + 2
+          ney1 = endY
+          nex2 = endX - 2
+          ney2 = endY
+        }
+        let rectPoint1 = {x: nsx1, y: nsy1}
+        let rectPoint2 = {x: nsx2, y: nsy2}
+        let rectPoint3 = {x: nex1, y: ney1}
+        let rectPoint4 = {x: nex2, y: ney2}
 
-          let nex1 = endX + 2
-          let ney1 = endY
-          let nex2 = endX - 2
-          let ney2 = endY
+        // 1 -> 3 -> 4 -> 2 rect
+        // let rectPoints = [rectPoint1, rectPoint3, rectPoint4, rectPoint2]
+        // console.log("rectPoints: ", rectPoints)
+        let tempRectCanvas = document.createElement("canvas", {is: "tempRectCanvas"})
+        let tempRect = new Path2D()
+        tempRect.moveTo(rectPoint1.x, rectPoint1.y)
+        tempRect.lineTo(rectPoint3.x, rectPoint3.y)
+        tempRect.lineTo(rectPoint4.x, rectPoint4.y)
+        tempRect.lineTo(rectPoint2.x, rectPoint2.y)
+        tempRect.closePath()
 
-          let rectPoint3 = {x: nex1, y: ney1}
-          let rectPoint4 = {x: nex2, y: ney2}
-
-          // 1 -> 3 -> 4 -> 2 rect
-          // let rectPoints = [rectPoint1, rectPoint3, rectPoint4, rectPoint2]
-          // console.log("rectPoints: ", rectPoints)
-          let tempRectCanvas = document.createElement("canvas", {is: "tempRectCanvas"})
-          let tempRect = new Path2D()
-          tempRect.moveTo(rectPoint1.x, rectPoint1.y)
-          tempRect.lineTo(rectPoint3.x, rectPoint3.y)
-          tempRect.lineTo(rectPoint4.x, rectPoint4.y)
-          tempRect.lineTo(rectPoint2.x, rectPoint2.y)
-          tempRect.closePath()
-
-          // console.log(" ? ", tempRectCanvas.getContext('2d').isPointInPath(tempRect, mx, my))
-          if (tempRectCanvas.getContext('2d').isPointInPath(tempRect, mx, my)) {
-            addPointIndex = i + 1
-            addingPoint = mousePos
-          }
+        // console.log(" ? ", tempRectCanvas.getContext('2d').isPointInPath(tempRect, mx, my))
+        if (tempRectCanvas.getContext('2d').isPointInPath(tempRect, mx, my)) {
+          addPointIndex = i + 1
+          addingPoint = mousePos
         }
       }
 
       console.log(addPointIndex, addingPoint)
 
       if (addPointIndex && addingPoint) {
-        let copiedList = [...plgObjList]
+        let copiedList = [...rndPlgObjList]
         for (let j = 0; j < copiedList.length; j++) {
           if (copiedList[j].selected) {
             let copiedSelectedObj = {...copiedList[j]}
@@ -757,7 +787,7 @@ function ImageEditor() {
           }
         }
 
-        setPlgObjList(copiedList)
+        setRndPlgObjList(copiedList)
       }
     }
   }
@@ -768,8 +798,9 @@ function ImageEditor() {
       <Toolbar/>
       <Jobsbar/>
       <div id="mouse-coordinator">
-        <MouseCoordinator imgRef={imageRef} scaleRatio={scaleRatio}/>
+        <MemoMouseCoordinator imgRef={imageRef} scaleRatio={scaleRatio}/>
         <Stage
+          id="stage"
           width={imageElement.width}
           height={imageElement.height}
           ref={ref => {
@@ -780,6 +811,8 @@ function ImageEditor() {
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
           onWheel={wheelHandler}
+          scaleX={scaleRatio}
+          scaleY={scaleRatio}
           x={stageX}
           y={stageY}
         >
@@ -797,7 +830,7 @@ function ImageEditor() {
             />
 
             {/* 작업 된 폴리곤들에 대한 매핑 컴포넌트 */}
-            {plgObjList.map(plgObj =>
+            {rndPlgObjList.map(plgObj =>
               <PolygonAnnotation
                 plgObj={plgObj}
                 points={plgObj.points}

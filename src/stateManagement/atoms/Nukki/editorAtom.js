@@ -1,5 +1,20 @@
 import {atom} from "recoil";
 
+export const originImageSizeState = atom({
+  key: 'editor/originImageSize',
+  default: {w: 1600, h: 900}
+})
+
+export const newImageRatioState = atom({
+  key: 'editor/newImageRatio',
+  default: 1
+})
+
+export const oldImageRatioState = atom({
+  key: 'editor/oldImageRatio',
+  default: 1
+})
+
 export const imageInfoState = atom({
   key: 'editor/imageInfo',
   default: {},
